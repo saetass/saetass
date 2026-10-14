@@ -204,7 +204,7 @@ class DiffusionSolver(SubSolver):
         state : :py:class:`~saetass.state.State`
             Current simulation state. The differential density is updated in-place at the end of the call.
         """
-        dt = float(np.diff(self.t_grid)[0]) * n_steps
+        dt = self._dt * n_steps
 
         values_all = state._get_values()
 

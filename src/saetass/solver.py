@@ -80,6 +80,17 @@ class SubSolver(ABC):
     #: Accepted user-facing parameters and their canonical units.
     PARAM_SPECS: ClassVar[Mapping[str, ParamSpec]] = MappingProxyType({})
 
+    @property
+    def t_grid(self) -> np.ndarray:
+        """Time grid of the operator, in canonical :py:data:`~saetass.units.TIME` units."""
+        return self._t_grid
+
+    @t_grid.setter
+    def t_grid(self, value: np.ndarray) -> None:
+        self._t_grid = np.asarray(value, dtype=float)
+        # advance() runs every step: difference the (long) grid once, not per call
+        self._dt = float(self._t_grid[1] - self._t_grid[0])
+
     @classmethod
     def convert_params(cls, params: Mapping[str, Any], grid: Grid) -> dict[str, Any]:
         """

@@ -88,8 +88,7 @@ class SourceSolver(SubSolver):
         state : :py:class:`~saetass.state.State`
             Current simulation state. The differential density is updated in-place at the end of the call.
         """
-        diff_dt = float(np.diff(self.t_grid)[0])
-        total_dt = float(n_steps) * diff_dt
+        total_dt = float(n_steps) * self._dt
 
         # Process source term efficiently
         if self.is_source_dynamic:

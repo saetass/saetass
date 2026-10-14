@@ -216,7 +216,7 @@ class HyperbolicSolver(SubSolver, ABC):
 
         dx = self.dx if self.M is None else self.dx[None, :]
 
-        dt_requested = float(np.diff(self.t_grid)[0])
+        dt_requested = self._dt
         total_time = float(n_steps) * dt_requested
         t_local = state.t_val
         # Remaining time below this relative tolerance is rounding residue, not a step to take
