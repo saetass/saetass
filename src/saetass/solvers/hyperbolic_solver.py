@@ -256,7 +256,8 @@ class HyperbolicSolver(SubSolver, ABC):
         values_new = np.maximum(values_new, 0.0)
         state._update_values(values_new.T if self.axis == 0 else values_new)
 
-        logger.debug(f"max(|values|) after step: {np.max(np.abs(values_new)):.4g}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"max(|values|) after step: {np.max(np.abs(values_new)):.4g}")
 
     # ---------------- internal helpers ----------------
     def _unpack_params(self, params: dict = None) -> None:

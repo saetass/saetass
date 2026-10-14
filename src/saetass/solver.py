@@ -10,6 +10,7 @@ Hence, it serves as the central orchestrator of the simulation workflow, while d
 """
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -28,6 +29,9 @@ from .diagnostics import warn as _warn
 from .grid import Grid
 from .splitting import create_splitting_scheme
 from .state import State
+
+#: Seconds between updates of the extrema shown by the progress bar, its refresh period.
+_PROGRESS_METRICS_INTERVAL = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,17 +381,20 @@ class Solver:
             )
             manage_progress = True
 
+        next_metrics = 0.0
         for _ in range(n_steps):
             self.global_step += 1
 
-            val_max = np.max(self.state._values)
-            val_min = np.min(self.state._values)
-
-            self._progress.update(
-                self._task_id,
-                completed=self.global_step,
-                metrics=f"max={val_max:.4g} min={val_min:.4g}",
-            )
+            # The bar redraws a few times per second: computing the extrema of the
+            # state for every step would cost more than a step on small grids
+            update = {"completed": self.global_step}
+            now = time.monotonic()
+            if now >= next_metrics:
+                next_metrics = now + _PROGRESS_METRICS_INTERVAL
+                val_max = np.max(self.state._values)
+                val_min = np.min(self.state._values)
+                update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+            self._progress.update(self._task_id, **update)
 
             self.splitting_scheme.apply(
                 self.operator_list,
@@ -396,9 +403,10 @@ class Solver:
                 self.state,
             )
 
-        logger.debug(
-            f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
+            )
 
         if manage_progress or self.global_step >= self.total_steps:
             if self._progress is not None:

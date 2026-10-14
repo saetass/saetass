@@ -220,12 +220,12 @@ class StrangSplitting(SplittingScheme):
 
         # First half-step for all but the last operator
         for op, subsolver in zip(operator_list[:-1], operator_subsolvers[:-1]):
-            logger.debug(f"Strang splitting: first half-step for operator '{op}'")
+            logger.debug("Strang splitting: first half-step for operator '%s'", op)
             n_sub = substeps_per_op[op]
             subsolver.advance(n_sub, state)
 
         # Full step for the last operator
-        logger.debug(f"Strang splitting: full step for operator '{operator_list[-1]}'")
+        logger.debug("Strang splitting: full step for operator '%s'", operator_list[-1])
         n_sub = substeps_per_op[operator_list[-1]]
         operator_subsolvers[-1].advance(n_sub, state)
 
@@ -233,7 +233,7 @@ class StrangSplitting(SplittingScheme):
         for op, subsolver in zip(
             reversed(operator_list[:-1]), reversed(operator_subsolvers[:-1])
         ):
-            logger.debug(f"Strang splitting: second half-step for operator '{op}'")
+            logger.debug("Strang splitting: second half-step for operator '%s'", op)
             n_sub = substeps_per_op[op]
             subsolver.advance(n_sub, state)
 
@@ -306,7 +306,7 @@ class LieSplitting(SplittingScheme):
             State wrapper iterated across consecutively.
         """
         for op, subsolver in zip(operator_list, operator_subsolvers):
-            logger.debug(f"Lie splitting: full step for operator '{op}'")
+            logger.debug("Lie splitting: full step for operator '%s'", op)
             n_sub = substeps_per_op[op]
             subsolver.advance(n_sub, state)
 

@@ -10,6 +10,7 @@ time-dependent parameters, and both splitting schemes). Regenerate the data with
 ``--update-golden`` only for an intended, explained change of the numerics.
 """
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -214,6 +215,22 @@ def test_matches_golden_output(case, update_golden):
 
     with np.load(GOLDEN_PATH) as golden:
         expected = golden[case]
+    np.testing.assert_allclose(
+        result, expected, rtol=RTOL, atol=RTOL * np.max(np.abs(expected))
+    )
+
+
+def test_debug_logging_does_not_change_the_result(caplog):
+    """The debug messages computed only when enabled report without side effects."""
+    with caplog.at_level(logging.DEBUG, logger="saetass"):
+        result = CASES["full_2d_strang"]()
+    messages = caplog.text
+    assert "max(|values|) after step" in messages
+    assert "Advance finished" in messages
+    assert "Strang splitting: full step for operator 'diffusion'" in messages
+
+    with np.load(GOLDEN_PATH) as golden:
+        expected = golden["full_2d_strang"]
     np.testing.assert_allclose(
         result, expected, rtol=RTOL, atol=RTOL * np.max(np.abs(expected))
     )
