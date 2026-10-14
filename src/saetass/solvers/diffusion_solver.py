@@ -186,6 +186,9 @@ class DiffusionSolver(SubSolver):
         self.hL_b = self.h_left[None, :]
         self.hR_b = self.h_right[None, :]
 
+        # Time step of the assembled matrices, which only change with it and with D
+        self._matrices_dt = None
+
         # Precompute static conductances if D is not dynamic
         if getattr(self, "is_D_dynamic", False) is False:
             self._update_conductances(self.D_values_static)
@@ -358,8 +361,10 @@ class DiffusionSolver(SubSolver):
         f_all: shape (n_p, N)
         Returns f_new_all shape (n_p, N)
         """
-        # Matrices depend on dt and G. We rebuild them every step (dt could change).
-        self._build_matrices(dt)
+        # Matrices depend on dt and G: rebuild them only when either changes
+        if self.is_D_dynamic or dt != self._matrices_dt:
+            self._build_matrices(dt)
+            self._matrices_dt = dt
 
         # Build RHS: rhs = B @ f_current
         f = f_all

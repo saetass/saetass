@@ -165,6 +165,7 @@ class HyperbolicSolver(SubSolver, ABC):
                 self.V_centers
             )
             self._get_V_centers = lambda t: self.V_centers_static
+            self._dt_cfl_static = float(self._compute_dt(V_faces=self.V_faces_static))
 
     @property
     def _main_centers(self) -> np.ndarray:
@@ -224,7 +225,12 @@ class HyperbolicSolver(SubSolver, ABC):
 
         while total_time > time_tolerance:
             V_centers, V_faces = self._get_velocities(t_local)
-            dt_step = min(total_time, float(self._compute_dt(V_faces=V_faces)))
+            dt_cfl = (
+                float(self._compute_dt(V_faces=V_faces))
+                if self.is_V_dynamic
+                else self._dt_cfl_static
+            )
+            dt_step = min(total_time, dt_cfl)
 
             if self.order == 1:
                 F = self._compute_first_order_fluxes(U, V_centers, V_faces)
