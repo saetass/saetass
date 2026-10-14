@@ -57,6 +57,10 @@ jobs:
           uv pip list
 
       - name: Run tests
+        # The kernels parallelize with prange even on 1D grids, where thread
+        # synchronization dominates and depends on the load of the runner
+        env:
+          NUMBA_NUM_THREADS: 1
         run: python -m pytest
 
   docs:
