@@ -311,24 +311,31 @@ class TestLossSolverOrder:
 
 
 class TestLossSolverExceptionsAndEdges:
-    def test_missing_v_centers_for_adiabatic(self):
+    @pytest.mark.parametrize(
+        "extra",
+        [{}, {"v_centers_physical": np.ones((2, 2)) * su.VELOCITY}],
+        ids=["without_velocity", "with_velocity"],
+    )
+    def test_adiabatic_losses_not_implemented(self, extra):
         grid = Grid(
-            p_centers=np.array([5.0, 10.0]) * su.MOMENTUM,
-            is_p_log=False,
+            r_centers=np.array([1.0, 2.0]) * su.LENGTH,
+            p_centers=np.array([50.0, 100.0]) * su.MOMENTUM,
             t_grid=np.array([0.0, 1.0]) * su.TIME,
         )
         params = {
-            "P_dot": np.array([-1.0, -1.0]) * su.MOMENTUM_LOSS_RATE,
+            "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
             "adiabatic_losses": True,
+            **extra,
         }
-        state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
-        with pytest.raises(ValueError, match="v_centers_physical must be provided"):
+        state = State(
+            psi_p=np.ones((2, 2)) * su.PSI_P, grid=grid, particle=Particle.PROTON
+        )
+        with pytest.raises(NotImplementedError, match="Adiabatic losses"):
             Solver(
                 grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
-                substeps={"loss": 1},
             )
 
     def test_callable_P_dot(self):
@@ -359,35 +366,6 @@ class TestLossSolverExceptionsAndEdges:
             substeps={"loss": 1},
         )
         assert solver.operator_subsolvers[0] is not None
-
-    def test_2D_and_adiabatic(self):
-        grid = Grid(
-            r_centers=np.array([1.0, 2.0]) * su.LENGTH,
-            p_centers=np.array([50.0, 100.0]) * su.MOMENTUM,
-            is_p_log=True,
-            t_grid=np.array([0.0, 1.0]) * su.TIME,
-        )
-        params = {
-            "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
-            "adiabatic_losses": True,
-            "v_centers_physical": np.ones((2, 2)) * su.VELOCITY,
-            "limiter": "minmod",
-            "order": 1,
-            "cfl": 0.5,
-            "inflow_value_psi": 0.0 * su.PSI_P,
-        }
-        state = State(
-            psi_p=np.ones((2, 2)) * su.PSI_P, grid=grid, particle=Particle.PROTON
-        )
-        solver = Solver(
-            grid=grid,
-            state=state,
-            problem_type="loss",
-            operator_params={"loss": params},
-            substeps={"loss": 1},
-        )
-        # Should initialize successfully
-        assert hasattr(solver.operator_subsolvers[0], "P_dot_adiabatic")
 
     def test_inverse_generalized_errors(self):
         grid = Grid(
