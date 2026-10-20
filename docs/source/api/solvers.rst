@@ -10,6 +10,7 @@ for source terms.
 
 Operator parameters are given to the :py:class:`~saetass.solver.Solver` as physical :py:class:`~astropy.units.Quantity` objects, or as callables returning them for time-dependent parameters.
 Optionally, time dependences that are sums of fixed profiles scaled by functions of time can be written as such, for instance ``P_dot_synchrotron * TimeFactor(B_squared) + P_dot_gas``: the advection and loss operators advance these :py:class:`~saetass.parameters.Separable` parameters much faster when they need many sub-cycles per step (see :doc:`performance`).
+:py:meth:`~saetass.utils.energy_losses.EnergyLossCalculator.get_momentum_loss_rate` builds them from the time dependence of each loss mechanism.
 Each :py:class:`~saetass.solver.SubSolver` declares the parameters it accepts, together with their canonical units, in :py:attr:`~saetass.solver.SubSolver.PARAM_SPECS` through :py:class:`~saetass.solver.ParamSpec` entries.
 The :py:class:`~saetass.solver.Solver` converts them with :py:meth:`~saetass.solver.SubSolver.convert_params` into bare floats in the canonical units of :py:mod:`saetass.units`, so the numerical kernels never handle units, and rejects any parameter that is not declared or whose units are incompatible.
 

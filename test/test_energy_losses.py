@@ -2,6 +2,8 @@ import astropy.units as u
 import numpy as np
 import pytest
 
+from saetass import Separable
+from saetass import units as su
 from saetass.utils.energy_losses import EnergyLossCalculator, Particle
 
 
@@ -141,3 +143,69 @@ class TestEnergyLossCalculator:
 
         timescales_r = calc_e.get_loss_timescales(r_index=0)
         assert timescales_r["total"].shape == (len(base_args["E_grid"]),)
+
+
+class TestTimeDependentLosses:
+    @pytest.fixture
+    def calculator(self, base_args):
+        calc = EnergyLossCalculator(**base_args, particle="electron")
+        calc.compute_sychrotron_losses(B_field=10 * u.uG)
+        calc.compute_bremsstrahlung_losses(ionised_mask=np.zeros(20, dtype=bool))
+        calc.compute_ionization_losses()
+        calc.compute_coulomb_losses(T_gas=1e4 * u.K)
+        return calc
+
+    def test_without_time_factors_the_rate_is_static(self, calculator):
+        static = calculator.get_momentum_loss_rate()
+        separable = calculator.get_momentum_loss_rate(time_factors={})
+        assert isinstance(separable, Separable)
+        assert separable.factors == [1.0]
+        np.testing.assert_array_equal(
+            separable(0 * u.Myr).to_value(static.unit), static.value
+        )
+
+    def test_time_factors_scale_each_mechanism(self, calculator):
+        def B_squared(t):
+            return (1.0 + t.to_value(u.Myr)) ** 2
+
+        def gas(t):
+            return 2.0 - t.to_value(u.Myr)
+
+        P_dot = calculator.get_momentum_loss_rate(
+            time_factors={
+                "synchrotron": B_squared,
+                "bremsstrahlung": gas,
+                "ionization": gas,
+                "coulomb": 0.5,
+            }
+        )
+        # Mechanisms that share a function share a profile, and constant ones fold into one
+        assert P_dot.factors == [B_squared, gas, 1.0]
+
+        t = 0.3 * u.Myr
+        components = calculator._E_dot_components
+        E_dot = (
+            B_squared(t) * components["synchrotron"]
+            + gas(t) * (components["bremsstrahlung"] + components["ionization"])
+            + 0.5 * components["coulomb"]
+        )
+        expected = E_dot * calculator.dp_dE[:, np.newaxis]
+        np.testing.assert_allclose(
+            P_dot(t).to_value(su.MOMENTUM_LOSS_RATE),
+            expected.to_value(su.MOMENTUM_LOSS_RATE),
+            rtol=1e-14,
+        )
+
+        only_dynamic = calculator.get_momentum_loss_rate(
+            time_factors=dict.fromkeys(components, gas)
+        )
+        assert only_dynamic.factors == [gas]
+
+    def test_invalid_time_factors(self, base_args, calculator):
+        with pytest.raises(ValueError, match="have not been computed: \\['pion'\\]"):
+            calculator.get_momentum_loss_rate(time_factors={"pion": 2.0})
+        with pytest.raises(TypeError, match="'synchrotron' must be a callable"):
+            calculator.get_momentum_loss_rate(time_factors={"synchrotron": "B"})
+        empty = EnergyLossCalculator(**base_args, particle="electron")
+        with pytest.raises(RuntimeError, match="No energy loss mechanisms"):
+            empty.get_momentum_loss_rate(time_factors={})

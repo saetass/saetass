@@ -16,6 +16,8 @@ The simplest way to build one is to write the formula, multiplying each profile 
 
 >>> B_squared = TimeFactor(lambda t: (field(t) / B0) ** 2)  # doctest: +SKIP
 >>> P_dot = P_dot_synchrotron * B_squared + P_dot_other  # doctest: +SKIP
+
+:py:meth:`~saetass.utils.energy_losses.EnergyLossCalculator.get_momentum_loss_rate` builds the separable loss rate itself when given the time dependence of each loss mechanism.
 """
 
 from collections.abc import Callable, Sequence
