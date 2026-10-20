@@ -7,7 +7,7 @@ import pytest
 from test_kernels import _use_python_kernels
 from test_solver_regression import RTOL
 
-from saetass import Grid, Particle, Separable, Solver, State, parallel
+from saetass import Grid, Particle, Separable, Solver, State, TimeFactor, parallel
 from saetass import units as su
 from saetass.parameters import CanonicalSeparable
 
@@ -179,7 +179,13 @@ def test_calling_a_separable():
             [np.ones(3) * su.VELOCITY, np.ones(4) * su.VELOCITY],
             [1.0, 1.0],
             ValueError,
-            "same shape",
+            "broadcast to a common shape",
+        ),
+        (
+            [np.ones(3) * su.VELOCITY, np.ones(3) * su.LENGTH],
+            [1.0, 1.0],
+            u.UnitsError,
+            "compatible units",
         ),
         ([np.ones(3) * su.VELOCITY], ["one"], TypeError, "callables or numbers"),
     ],
@@ -209,3 +215,66 @@ def test_separable_units_are_checked():
     not_dynamic = Separable([np.ones(R.size) * su.VELOCITY], [1.0])
     with pytest.raises(TypeError, match="does not accept a Separable"):
         LossSolver.convert_params({"v_centers_physical": not_dynamic}, grid)
+
+
+def test_profiles_broadcast_to_a_common_shape():
+    separable = Separable(
+        [np.ones((2, 1)) * su.VELOCITY, np.arange(3.0) * su.VELOCITY], [_ramp, 1.0]
+    )
+    assert [profile.shape for profile in separable.profiles] == [(2, 3), (2, 3)]
+    t = 0.5 * su.TIME
+    expected = _ramp(t).value + np.arange(3.0) * np.ones((2, 1))
+    np.testing.assert_allclose(separable(t).to_value(su.VELOCITY), expected)
+
+
+def test_the_formula_builds_a_separable():
+    profiles, unit = _parameter("loss", True)
+    first, second = profiles[0] * unit, profiles[1] * unit
+    wave, ramp = TimeFactor(_wave), TimeFactor(_ramp)
+
+    separable = first * wave + ramp * second
+    assert isinstance(separable, Separable)
+    assert separable.factors == [_wave, _ramp]
+
+    t = 0.02 * su.TIME
+    assert wave(t) == _wave(t)
+    terms = {
+        "sum with a constant": (first * wave + second, _wave(t) * first + second),
+        "constant first": (second + first * wave, second + _wave(t) * first),
+        "difference": (first * wave - second, _wave(t) * first - second),
+        "from a constant": (second - first * wave, second - _wave(t) * first),
+        "of separables": (first * wave - second * wave, _wave(t) * (first - second)),
+        "negation": (-(first * wave), -_wave(t) * first),
+        "scaled": (2.0 * (first * wave) * 3, 6.0 * _wave(t) * first),
+    }
+    for name, (term, expected) in terms.items():
+        assert isinstance(term, Separable), name
+        np.testing.assert_allclose(
+            term(t).to_value(unit), expected.to_value(unit), rtol=1e-15, err_msg=name
+        )
+
+    # The formula and the explicit constructor give the same simulation
+    explicit, _ = _separable_and_callable("loss", True)
+    by_formula = first * TimeFactor(_wave) + second * TimeFactor(_ramp)
+    np.testing.assert_array_equal(
+        _run("loss", True, by_formula)[0], _run("loss", True, explicit)[0]
+    )
+
+
+def test_invalid_formulas():
+    profile = np.ones(3) * su.VELOCITY
+    separable = profile * TimeFactor(_wave)
+    with pytest.raises(TypeError, match="needs a callable of time"):
+        TimeFactor(2.0)
+    for invalid in (
+        lambda: TimeFactor(_wave) * 2.0,
+        lambda: TimeFactor(_wave) * np.ones(3),
+        lambda: separable + 1.0,
+        lambda: 1.0 + separable,
+        lambda: separable - "one",
+        lambda: "one" - separable,
+        lambda: separable * profile,
+        lambda: separable * TimeFactor(_wave),
+    ):
+        with pytest.raises(TypeError):
+            invalid()

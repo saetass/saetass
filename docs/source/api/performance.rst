@@ -25,7 +25,7 @@ Separable time dependences
 --------------------------
 
 .. automodule:: saetass.parameters
-    :members: Separable, CanonicalSeparable
+    :members: Separable, TimeFactor, CanonicalSeparable
 
 Parameter sweeps
 ----------------

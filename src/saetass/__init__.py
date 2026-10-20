@@ -4,7 +4,7 @@ SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Sy
 
 from . import units
 from .grid import Grid
-from .parameters import Separable
+from .parameters import Separable, TimeFactor
 from .solver import Solver
 from .solvers.advection_solver import AdvectionSolver
 from .solvers.diffusion_solver import DiffusionSolver
@@ -20,6 +20,7 @@ __all__ = [
     "Solver",
     "Particle",
     "Separable",
+    "TimeFactor",
     "SplittingScheme",
     "DiffusionSolver",
     "AdvectionSolver",

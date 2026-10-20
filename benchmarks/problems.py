@@ -111,6 +111,13 @@ def _separable(profiles, factors):
     return Separable(profiles, factors)
 
 
+def _time_factor(function):
+    """A :py:class:`saetass.TimeFactor`, imported here for the same reason."""
+    from saetass import TimeFactor
+
+    return TimeFactor(function)
+
+
 def _hyperbolic_options(order: int = 2, limiter: str = "minmod") -> dict:
     return {"order": order, "limiter": limiter, "cfl": 0.8}
 
@@ -563,7 +570,8 @@ def electrons_2d(n_steps: int | None = None, dynamic: bool | str = False) -> Pro
     2400 sub-cycles per half-step. Diffusion is Bohm. With ``dynamic=True`` the field,
     the velocity and hence the loss rate and diffusion coefficient oscillate with a
     period of :math:`10^{-3}` Myr; ``dynamic="separable"`` declares the same time
-    dependence with :py:class:`saetass.Separable` parameters.
+    dependence with :py:class:`saetass.Separable` parameters, written with
+    :py:class:`saetass.TimeFactor`.
     """
     if n_steps is None:
         n_steps = 1 if dynamic else 2
@@ -587,18 +595,15 @@ def electrons_2d(n_steps: int | None = None, dynamic: bool | str = False) -> Pro
         return 1.0 + 0.5 * np.sin(omega * t.to_value(su.TIME))
 
     if dynamic == "separable":
-        # The same time dependence, declared as sums of profiles times factors
-        v_param = _separable(
-            [v0 * su.VELOCITY],
-            [lambda t: 1.0 + 0.1 * np.sin(omega * t.to_value(su.TIME))],
+        # The same time dependence, written as its formula
+        wind = _time_factor(lambda t: 1.0 + 0.1 * np.sin(omega * t.to_value(su.TIME)))
+        B_squared = _time_factor(lambda t: field(t) ** 2)
+        inverse_B = _time_factor(lambda t: 1.0 / field(t))
+        v_param = v0 * su.VELOCITY * wind
+        P_dot_param = (
+            P_sync * su.MOMENTUM_LOSS_RATE * B_squared + P_other * su.MOMENTUM_LOSS_RATE
         )
-        P_dot_param = _separable(
-            [P_sync * su.MOMENTUM_LOSS_RATE, P_other * su.MOMENTUM_LOSS_RATE],
-            [lambda t: field(t) ** 2, 1.0],
-        )
-        D_param = _separable(
-            [D0 * su.DIFFUSION_COEFFICIENT], [lambda t: 1.0 / field(t)]
-        )
+        D_param = D0 * su.DIFFUSION_COEFFICIENT * inverse_B
     elif dynamic:
 
         def v_param(t):

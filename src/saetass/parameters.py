@@ -12,6 +12,10 @@ Synchrotron losses scale as :math:`B(t)^2`, inverse Compton losses with the ener
 Any operator accepts it wherever it accepts a callable, and the advection and loss operators use it to advance all the CFL sub-cycles of a step in a single compiled call: per sub-cycle only the scalar factors :math:`f_k(t)` are evaluated in Python, instead of the whole parameter array.
 
 Separable parameters are optional: a plain callable always works and gives the same result, only more slowly when the operator needs many sub-cycles per step.
+The simplest way to build one is to write the formula, multiplying each profile by a :py:class:`TimeFactor`:
+
+>>> B_squared = TimeFactor(lambda t: (field(t) / B0) ** 2)  # doctest: +SKIP
+>>> P_dot = P_dot_synchrotron * B_squared + P_dot_other  # doctest: +SKIP
 """
 
 from collections.abc import Callable, Sequence
@@ -23,7 +27,7 @@ import numpy as np
 
 from . import units as su
 
-__all__ = ["Separable"]
+__all__ = ["Separable", "TimeFactor"]
 
 
 class Separable:
@@ -33,9 +37,14 @@ class Separable:
     Parameters
     ----------
     profiles : sequence of astropy.units.Quantity
-        The profiles :math:`X_k`, all with the same shape and with units compatible with those of the parameter they are given for.
+        The profiles :math:`X_k`, with units compatible with those of the parameter they are given for. Their shapes must broadcast to a common shape, the shape of the parameter.
     factors : sequence of callable or float
         The factors :math:`f_k`, one per profile: callables of the time (an :py:class:`~astropy.units.Quantity`) returning a dimensionless number or Quantity, or constant numbers.
+
+    Notes
+    -----
+    Separable parameters support the arithmetic of their formula: they can be added to each other and to Quantities (profiles with a constant factor of one), subtracted, negated and multiplied by numbers.
+    A Quantity multiplied by a :py:class:`TimeFactor` is a Separable with a single profile.
 
     Examples
     --------
@@ -46,10 +55,19 @@ class Separable:
     ...     [lambda t: (field(t) / B0) ** 2, 1.0],
     ... )  # doctest: +SKIP
 
+    The same parameter written as its formula:
+
+    >>> P_dot = (
+    ...     P_dot_synchrotron * TimeFactor(lambda t: (field(t) / B0) ** 2) + P_dot_other
+    ... )  # doctest: +SKIP
+
     Calling it returns the parameter at a time, so it is also a valid time-dependent parameter for every operator:
 
     >>> P_dot(0.1 * u.Myr)  # doctest: +SKIP
     """
+
+    # Let Quantities and arrays defer their operators with a Separable to it
+    __array_ufunc__ = None
 
     def __init__(
         self,
@@ -69,11 +87,20 @@ class Separable:
                 raise TypeError(
                     f"Separable profiles must be astropy Quantities, got {type(profile).__name__}."
                 )
-        shapes = {np.shape(profile) for profile in profiles}
-        if len(shapes) > 1:
+        unit = profiles[0].unit
+        for profile in profiles[1:]:
+            if not profile.unit.is_equivalent(unit):
+                raise u.UnitsError(
+                    f"Separable profiles must have compatible units, got {unit} and {profile.unit}."
+                )
+        shapes = [np.shape(profile) for profile in profiles]
+        try:
+            shape = np.broadcast_shapes(*shapes)
+        except ValueError:
             raise ValueError(
-                f"Separable profiles must have the same shape, got {sorted(shapes)}."
-            )
+                f"Separable profiles must broadcast to a common shape, got {shapes}."
+            ) from None
+        profiles = [np.broadcast_to(profile, shape, subok=True) for profile in profiles]
         for factor in factors:
             if not (callable(factor) or isinstance(factor, Real)):
                 raise TypeError(
@@ -109,6 +136,91 @@ class Separable:
         ]
         factors = [_canonical_factor(factor, name) for factor in self.factors]
         return CanonicalSeparable(profiles, factors)
+
+    def __add__(self, other: Any) -> "Separable":
+        other = _as_separable(other)
+        if other is NotImplemented:
+            return NotImplemented
+        return Separable(self.profiles + other.profiles, self.factors + other.factors)
+
+    def __radd__(self, other: Any) -> "Separable":
+        other = _as_separable(other)
+        if other is NotImplemented:
+            return NotImplemented
+        return other + self
+
+    def __neg__(self) -> "Separable":
+        return -1.0 * self
+
+    def __sub__(self, other: Any) -> "Separable":
+        other = _as_separable(other)
+        if other is NotImplemented:
+            return NotImplemented
+        return self + (-other)
+
+    def __rsub__(self, other: Any) -> "Separable":
+        other = _as_separable(other)
+        if other is NotImplemented:
+            return NotImplemented
+        return other + (-self)
+
+    def __mul__(self, number: Any) -> "Separable":
+        if not isinstance(number, Real):
+            return NotImplemented
+        return Separable([number * profile for profile in self.profiles], self.factors)
+
+    __rmul__ = __mul__
+
+
+class TimeFactor:
+    r"""
+    A function of time that scales a profile, to write a :py:class:`Separable` parameter as its formula.
+
+    Multiplying a Quantity by a ``TimeFactor`` gives a :py:class:`Separable` with that single profile, and Separables add to each other and to Quantities.
+
+    Parameters
+    ----------
+    function : callable
+        Function of the time (an :py:class:`~astropy.units.Quantity`) returning a dimensionless number or Quantity.
+
+    Examples
+    --------
+    Losses with a synchrotron term that follows a magnetic field :math:`B(t)` and an inverse Compton term that follows the luminosity of a star:
+
+    >>> P_dot = (
+    ...     P_dot_synchrotron * TimeFactor(lambda t: (field(t) / B0) ** 2)
+    ...     + P_dot_inverse_compton * TimeFactor(lambda t: luminosity(t) / L0)
+    ...     + P_dot_gas
+    ... )  # doctest: +SKIP
+    """
+
+    __array_ufunc__ = None
+
+    def __init__(self, function: Callable[[u.Quantity], Any]) -> None:
+        if not callable(function):
+            raise TypeError(
+                f"TimeFactor needs a callable of time, got {type(function).__name__}."
+            )
+        self.function = function
+
+    def __call__(self, t: u.Quantity) -> Any:
+        return self.function(t)
+
+    def __mul__(self, profile: Any) -> Separable:
+        if not isinstance(profile, u.Quantity):
+            return NotImplemented
+        return Separable([profile], [self.function])
+
+    __rmul__ = __mul__
+
+
+def _as_separable(value: Any) -> "Separable":
+    """A Separable, or a Quantity as a Separable with a constant factor of one."""
+    if isinstance(value, Separable):
+        return value
+    if isinstance(value, u.Quantity):
+        return Separable([value], [1.0])
+    return NotImplemented
 
 
 class CanonicalSeparable:
