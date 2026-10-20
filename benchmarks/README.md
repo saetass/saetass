@@ -24,8 +24,8 @@ From the root of the repository, in the development environment (`pip install -e
 # Every benchmark, saving the results as a reference
 pytest benchmarks --benchmark-save=baseline
 
-# The same with a single Numba thread
-NUMBA_NUM_THREADS=1 pytest benchmarks --benchmark-save=baseline-serial
+# The same with every kernel serial
+SAETASS_MAX_THREADS=1 pytest benchmarks --benchmark-save=baseline-serial
 
 # Compare against saved run 0001, failing if a median gets 10% slower
 pytest benchmarks --benchmark-compare=0001 --benchmark-compare-fail=median:10%
@@ -47,13 +47,16 @@ than means: the mean is sensitive to the occasional slow round.
 
 ### Threads and the load of the machine
 
-The parallel kernels run on the threads of Numba, one per core unless
-`NUMBA_NUM_THREADS` says otherwise (CI uses `1`). Numba sizes its thread pool when it
-starts, so compare thread counts in separate processes with different
-`NUMBA_NUM_THREADS`.
+The kernels choose their threads from the work of the simulation and the cores of the
+machine (see `saetass.parallel`). Two variables fix them for a comparison:
+`SAETASS_MAX_THREADS` limits the threads of every kernel call (`1` runs every kernel
+serially), and `NUMBA_NUM_THREADS`, read when Numba starts, sets the threads available
+to Numba (CI uses `1`).
 
-Other processes compete for the cores and change the timings: benchmark on a machine
-without other heavy work. Even then, whole runs on a laptop drift by up to 10% from one to
+Other processes change the timings in two ways: they compete for the cores, and on Linux
+SAETASS leaves the cores they keep busy free, so a loaded machine also runs with fewer
+threads. Benchmark on a machine without other heavy work, or set `SAETASS_MAX_THREADS`
+below its idle cores. Even then, whole runs on a laptop drift by up to 10% from one to
 the next (temperature, background processes), more than the spread within a run
 suggests: re-run the affected benchmarks, alternating the two versions, before trusting
 a small difference.
@@ -80,5 +83,5 @@ compiles the Numba kernels:
 
 ```bash
 cd benchmarks
-NUMBA_NUM_THREADS=1 python profile_problem.py full_2d --limit 30
+SAETASS_MAX_THREADS=1 python profile_problem.py full_2d --limit 30
 ```

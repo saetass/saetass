@@ -57,8 +57,8 @@ jobs:
           uv pip list
 
       - name: Run tests
-        # The kernels parallelize with prange even on 1D grids, where thread
-        # synchronization dominates and depends on the load of the runner
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
         env:
           NUMBA_NUM_THREADS: 1
         run: python -m pytest

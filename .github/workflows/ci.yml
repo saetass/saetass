@@ -26,11 +26,17 @@ jobs:
         run: ruff check . && ruff format --check .
 
       - name: Run tests with Coverage
-        # The kernels parallelize with prange even on 1D grids, where thread
-        # synchronization dominates and depends on the load of the runner
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
         env:
           NUMBA_NUM_THREADS: 1
         run: pytest --cov=saetass --cov-report=xml
+
+      - name: Run the kernels in parallel
+        # Every kernel call forced onto several threads must reproduce the serial runs
+        env:
+          NUMBA_NUM_THREADS: 4
+        run: pytest test/test_parallel.py
 
       - name: Check that the benchmarks run
         # Only once each: timings on shared runners are too noisy to compare
