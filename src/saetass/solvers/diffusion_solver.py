@@ -48,7 +48,7 @@ class DiffusionSolver(SubSolver):
         Solver configuration, already converted to canonical floats by :py:meth:`~saetass.solver.SubSolver.convert_params`. Accepted keys (and the units required at the :py:class:`~saetass.solver.Solver` level) are:
 
         D_values : astropy.units.Quantity or callable
-            Diffusion coefficient at cell centres. Units compatible with :py:data:`~saetass.units.DIFFUSION_COEFFICIENT`. Shape must match the grid (``(nr,)`` for 1D or ``(np, nr)`` for 2D).  A callable must have signature ``D_values(t: Quantity) -> Quantity``.
+            Diffusion coefficient at cell centres. Units compatible with :py:data:`~saetass.units.DIFFUSION_COEFFICIENT`. Shape must match the grid (``(nr,)`` for 1D or ``(np, nr)`` for 2D).  A callable must have signature ``D_values(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
         boundary_condition : ``{'dirichlet', 'neumann', 'outflow'}``, optional
             Outer boundary condition. Default is ``'dirichlet'``.
         psi_end : astropy.units.Quantity or callable, optional

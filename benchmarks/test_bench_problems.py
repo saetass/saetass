@@ -21,6 +21,7 @@ PROBLEMS = {
     # The full equation on a grid of typical size
     "full_2d": problems.full_2d,
     "full_2d_dynamic": lambda: problems.full_2d(dynamic=True),
+    "full_2d_separable": lambda: problems.full_2d(dynamic="separable"),
 }
 
 

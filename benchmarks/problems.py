@@ -13,8 +13,8 @@ Problems of the SAETASS performance benchmarks, in three groups.
   forces up to tens of thousands of sub-cycles per step.
 
 Every builder returns fresh objects, so a benchmark round always starts from the same
-initial state. The problems only use the API of SAETASS 0.5, so that they also measure
-that release.
+initial state. Apart from the variants with ``dynamic="separable"``, the problems only use
+the API of SAETASS 0.5, so that they also measure that release.
 """
 
 from dataclasses import dataclass
@@ -101,6 +101,16 @@ def _make_solver(
     )
 
 
+def _separable(profiles, factors):
+    """
+    A :py:class:`saetass.Separable` parameter, imported here so that the module (and the
+    benchmarks that do not use it) also runs with SAETASS 0.5, which does not have it.
+    """
+    from saetass import Separable
+
+    return Separable(profiles, factors)
+
+
 def _hyperbolic_options(order: int = 2, limiter: str = "minmod") -> dict:
     return {"order": order, "limiter": limiter, "cfl": 0.8}
 
@@ -162,14 +172,16 @@ def wind_bubble_1d(
 
 
 def full_2d(
-    n_r: int = 400, n_p: int = 71, n_steps: int = 20, dynamic: bool = False
+    n_r: int = 400, n_p: int = 71, n_steps: int = 20, dynamic: bool | str = False
 ) -> Problem:
     r"""
     The full transport equation on an :math:`(n_p, n_r)` grid.
 
     Advection needs three CFL sub-cycles per half-step and losses one. With
     ``dynamic=True`` the velocity and the loss rate are time-dependent callables, which
-    adds the cost of evaluating them and interpolating them to the faces every sub-cycle.
+    adds the cost of evaluating them and interpolating them to the faces every sub-cycle;
+    ``dynamic="separable"`` declares the same time dependence with
+    :py:class:`saetass.Separable` parameters.
     """
     r_max, r_ts = 18.0, 2.0
     r, p = _r_grid(n_r, r_max), _p_grid(n_p)
@@ -182,7 +194,15 @@ def full_2d(
     source = np.zeros((n_p, n_r))
     source[:, np.searchsorted(r, r_ts)] = p**-2.0 * np.exp(-p / 1e6)
 
-    if dynamic:
+    if dynamic == "separable":
+        v_param = _separable(
+            [v * su.VELOCITY], [lambda t: 1.0 + 0.1 * np.sin(t.to_value(su.TIME))]
+        )
+        P_dot_param = _separable(
+            [P_dot * su.MOMENTUM_LOSS_RATE],
+            [lambda t: 1.0 + 0.1 * np.cos(t.to_value(su.TIME))],
+        )
+    elif dynamic:
 
         def v_param(t):
             return (1.0 + 0.1 * np.sin(t.to_value(su.TIME))) * v * su.VELOCITY
@@ -280,7 +300,8 @@ def operator_case(operator: str, shape: tuple[int, ...], **options) -> OperatorC
 
     Its time step is a single CFL sub-cycle, so one call to ``advance`` evaluates the
     kernel exactly once. ``options`` override the hyperbolic options (``order``,
-    ``limiter``) and ``dynamic=True`` makes the parameters time-dependent callables.
+    ``limiter``); ``dynamic=True`` makes the parameters time-dependent callables, and
+    ``dynamic="separable"`` :py:class:`saetass.Separable` parameters.
     """
     dynamic = options.pop("dynamic", False)
     is_loss = operator == "loss"
@@ -311,6 +332,10 @@ def operator_case(operator: str, shape: tuple[int, ...], **options) -> OperatorC
     def maybe_dynamic(values, unit, coords=False):
         if not dynamic:
             return values * unit
+        if dynamic == "separable":
+            return _separable(
+                [values * unit], [lambda t: 1.0 + 0.1 * np.sin(t.to_value(su.TIME))]
+            )
 
         def fn(t):
             return (1.0 + 0.1 * np.sin(t.to_value(su.TIME))) * values * unit
@@ -526,7 +551,7 @@ def _shock_source(r: np.ndarray, spectrum: np.ndarray) -> np.ndarray:
     return source
 
 
-def electrons_2d(n_steps: int | None = None, dynamic: bool = False) -> Problem:
+def electrons_2d(n_steps: int | None = None, dynamic: bool | str = False) -> Problem:
     r"""
     Electrons in a strong-field, dense bubble: the full equation with every loss process.
 
@@ -537,7 +562,8 @@ def electrons_2d(n_steps: int | None = None, dynamic: bool = False) -> Problem:
     make :math:`\dot p` span many orders of magnitude and the loss operator needs about
     2400 sub-cycles per half-step. Diffusion is Bohm. With ``dynamic=True`` the field,
     the velocity and hence the loss rate and diffusion coefficient oscillate with a
-    period of :math:`10^{-3}` Myr.
+    period of :math:`10^{-3}` Myr; ``dynamic="separable"`` declares the same time
+    dependence with :py:class:`saetass.Separable` parameters.
     """
     if n_steps is None:
         n_steps = 1 if dynamic else 2
@@ -560,7 +586,20 @@ def electrons_2d(n_steps: int | None = None, dynamic: bool = False) -> Problem:
     def field(t):
         return 1.0 + 0.5 * np.sin(omega * t.to_value(su.TIME))
 
-    if dynamic:
+    if dynamic == "separable":
+        # The same time dependence, declared as sums of profiles times factors
+        v_param = _separable(
+            [v0 * su.VELOCITY],
+            [lambda t: 1.0 + 0.1 * np.sin(omega * t.to_value(su.TIME))],
+        )
+        P_dot_param = _separable(
+            [P_sync * su.MOMENTUM_LOSS_RATE, P_other * su.MOMENTUM_LOSS_RATE],
+            [lambda t: field(t) ** 2, 1.0],
+        )
+        D_param = _separable(
+            [D0 * su.DIFFUSION_COEFFICIENT], [lambda t: 1.0 / field(t)]
+        )
+    elif dynamic:
 
         def v_param(t):
             return (1.0 + 0.1 * np.sin(omega * t.to_value(su.TIME))) * v0 * su.VELOCITY
@@ -680,14 +719,15 @@ def electron_cooling_1d(n_steps: int = 2) -> Problem:
     return Problem(solver, n_steps)
 
 
-def wind_bubble_1d_stress(n_steps: int = 200, dynamic: bool = False) -> Problem:
+def wind_bubble_1d_stress(n_steps: int = 200, dynamic: bool | str = False) -> Problem:
     r"""
     Advection, source and diffusion in 1D with a 3000 km/s wind on 2000 cells.
 
     The time step of :math:`10^{-4}` Myr needs about 22 advection sub-cycles per
     half-step. Diffusion is Bohm at :math:`10^5` GeV/c in 100 :math:`\mu`G. With
     ``dynamic=True`` the wind velocity oscillates by 20% with a period of
-    :math:`10^{-3}` Myr.
+    :math:`10^{-3}` Myr; ``dynamic="separable"`` declares the same time dependence with
+    a :py:class:`saetass.Separable` parameter.
     """
     n_r = 2000
     r = _r_grid(n_r, R_MAX)
@@ -698,7 +738,12 @@ def wind_bubble_1d_stress(n_steps: int = 200, dynamic: bool = False) -> Problem:
     v = wind_velocity(r, R_TS, V_FAST)
     D = _bohm_diffusion(np.array([1e5]), B_FIELD)[0]
 
-    if dynamic:
+    if dynamic == "separable":
+        v_param = _separable(
+            [v * su.VELOCITY],
+            [lambda t: 1.0 + 0.2 * np.sin(2.0 * np.pi * t.to_value(su.TIME) / PERIOD)],
+        )
+    elif dynamic:
 
         def v_param(t):
             return (

@@ -27,6 +27,7 @@ from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
 from .grid import Grid
+from .parameters import Separable
 from .splitting import create_splitting_scheme
 from .state import State
 
@@ -100,8 +101,8 @@ class SubSolver(ABC):
         """
         Convert user-facing parameters into the bare canonical floats consumed by this subsolver.
 
-        Physical parameters must be Quantities (or, where declared dynamic, callables returning Quantities) with units equivalent to those declared in :py:attr:`PARAM_SPECS`.
-        Dynamic callables are wrapped into ``fn(t: float) -> ndarray`` in canonical units.
+        Physical parameters must be Quantities (or, where declared dynamic, callables returning Quantities, or :py:class:`~saetass.parameters.Separable` parameters) with units equivalent to those declared in :py:attr:`PARAM_SPECS`.
+        Dynamic callables are wrapped into ``fn(t: float) -> ndarray`` in canonical units, and separable parameters into :py:class:`~saetass.parameters.CanonicalSeparable`, which is also such a callable.
 
         Parameters
         ----------
@@ -138,6 +139,10 @@ class SubSolver(ABC):
             if spec.unit is None:
                 su.require_bare(value, name)
                 converted[key] = value
+            elif isinstance(value, Separable):
+                if not spec.dynamic:
+                    raise TypeError(f"{name} does not accept a Separable.")
+                converted[key] = value.canonical(spec.unit, name)
             elif callable(value):
                 if not spec.dynamic:
                     raise TypeError(f"{name} does not accept a callable.")

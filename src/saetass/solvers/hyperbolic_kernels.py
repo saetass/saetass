@@ -587,6 +587,266 @@ def advance_rows(
         )
 
 
+# ---------------------------------------------------------------------------
+# Velocities that combine components (Separable parameters)
+# ---------------------------------------------------------------------------
+
+
+@njit(inline="always", error_model="numpy")
+def _combine(factors, components, out):
+    """``out = sum_k factors[k] * components[k]``, accumulated in the order of the components."""
+    for i in range(out.shape[0]):
+        out[i] = factors[0] * components[0, i]
+    for k in range(1, factors.shape[0]):
+        for i in range(out.shape[0]):
+            out[i] += factors[k] * components[k, i]
+
+
+@njit(cache=True, error_model="numpy")
+def _advance_row_combined(
+    u,
+    vc,
+    vf,
+    c,
+    f,
+    inv,
+    dx_L,
+    dx_R,
+    r,
+    r2,
+    inflow,
+    steps,
+    order,
+    limiter,
+    left_mode,
+    spherical,
+    work,
+    factors,
+):
+    r"""
+    :py:func:`_advance_row` with velocities that combine components for every sub-cycle.
+
+    ``vc`` and ``vf`` hold the components at the centers ``(K, N)`` and faces ``(K, N - 1)``; the velocities of sub-cycle ``s`` are :math:`\sum_k` ``factors[s, k]`` times component ``k``.
+    """
+    vc_step, vf_step = work[6], work[7]
+    for s in range(steps.shape[0]):
+        _combine(factors[s], vc, vc_step)
+        _combine(factors[s], vf, vf_step)
+        _sub_cycle(
+            u,
+            vc_step,
+            vf_step,
+            c,
+            f,
+            inv,
+            dx_L,
+            dx_R,
+            r,
+            r2,
+            inflow,
+            steps[s],
+            order,
+            limiter,
+            left_mode,
+            spherical,
+            work,
+        )
+
+
+@njit(cache=True, error_model="numpy")
+def _process_row_combined(
+    values_in,
+    U,
+    values_out,
+    vc,
+    vf,
+    c,
+    f,
+    inv,
+    dx_L,
+    dx_R,
+    r,
+    r2,
+    scale,
+    inv_scale,
+    inflow,
+    steps,
+    order,
+    limiter,
+    left_mode,
+    spherical,
+    transform,
+    load,
+    store,
+    work,
+    factors,
+):
+    r"""
+    :py:func:`_process_row` with velocities that combine components (see :py:func:`_advance_row_combined`).
+    """
+    if load:
+        _load(values_in, scale, U)
+    _advance_row_combined(
+        U,
+        vc,
+        vf,
+        c,
+        f,
+        inv,
+        dx_L,
+        dx_R,
+        r,
+        r2,
+        inflow,
+        steps,
+        order,
+        limiter,
+        left_mode,
+        spherical,
+        work,
+        factors,
+    )
+    if store:
+        _store(U, scale, inv_scale, transform, values_out)
+
+
+@njit(cache=True, error_model="numpy")
+def _process_rows_combined(
+    start,
+    stop,
+    values_in,
+    U,
+    values_out,
+    V_centers,
+    V_faces,
+    c,
+    f,
+    inv,
+    dx_L,
+    dx_R,
+    r,
+    r2,
+    scale,
+    inv_scale,
+    inflow,
+    steps,
+    order,
+    limiter,
+    left_mode,
+    spherical,
+    transform,
+    load,
+    store,
+    factors,
+):
+    """:py:func:`_process_rows` with velocities that combine components ``(K, M, N)``."""
+    N = U.shape[1]
+    work = (
+        np.empty(N),
+        np.empty(N),
+        np.empty(N),
+        np.empty(N),
+        np.empty(N),
+        np.empty(N + 1),
+        np.empty(N),
+        np.empty(max(N - 1, 0)),
+    )
+    n_inflow = inflow.shape[0]
+    for j in range(start, stop):
+        _process_row_combined(
+            values_in[j],
+            U[j],
+            values_out[j],
+            V_centers[:, j],
+            V_faces[:, j],
+            c,
+            f,
+            inv,
+            dx_L,
+            dx_R,
+            r,
+            r2,
+            scale,
+            inv_scale,
+            inflow[0] if n_inflow == 1 else inflow[j],
+            steps,
+            order,
+            limiter,
+            left_mode,
+            spherical,
+            transform,
+            load,
+            store,
+            work,
+            factors,
+        )
+
+
+@twin_kernel(error_model="numpy")
+def advance_rows_combined(
+    values_in,
+    U,
+    values_out,
+    V_centers,
+    V_faces,
+    c,
+    f,
+    inv,
+    dx_L,
+    dx_R,
+    r,
+    r2,
+    scale,
+    inv_scale,
+    inflow,
+    steps,
+    order,
+    limiter,
+    left_mode,
+    spherical,
+    transform,
+    load,
+    store,
+    factors,
+    n_blocks,
+):
+    r"""
+    :py:func:`advance_rows` with velocities that combine components for every sub-cycle.
+
+    ``V_centers`` and ``V_faces`` hold ``K`` components, shapes ``(K, M, N)`` and ``(K, M, N - 1)``, and ``factors`` (``(len(steps), K)``) their factors: the velocities of sub-cycle ``s`` are :math:`\sum_k` ``factors[s, k]`` times component ``k``. This is how :py:class:`~saetass.parameters.Separable` parameters advance every sub-cycle of a step in one call.
+    """
+    M = U.shape[0]
+    for block in prange(n_blocks):
+        _process_rows_combined(
+            block * M // n_blocks,
+            (block + 1) * M // n_blocks,
+            values_in,
+            U,
+            values_out,
+            V_centers,
+            V_faces,
+            c,
+            f,
+            inv,
+            dx_L,
+            dx_R,
+            r,
+            r2,
+            scale,
+            inv_scale,
+            inflow,
+            steps,
+            order,
+            limiter,
+            left_mode,
+            spherical,
+            transform,
+            load,
+            store,
+            factors,
+        )
+
+
 @njit(cache=True, error_model="numpy")
 def faces_and_max(V, dist_left, dist_right, denom, out):
     """
@@ -601,4 +861,27 @@ def faces_and_max(V, dist_left, dist_right, denom, out):
             value = (V[m, k] * dist_right[k] + V[m, k + 1] * dist_left[k]) / denom[k]
             out[m, k] = value
             largest = max(largest, abs(value))
+    return largest
+
+
+@njit(cache=True, error_model="numpy")
+def separable_largest_speed(factors, V_faces, V_last):
+    r"""
+    Largest magnitude of :math:`\sum_k` ``factors[k]`` times the components ``V_faces`` (``K, M, N - 1``) and ``V_last`` (``K, L``).
+
+    The velocities of the CFL condition of a separable parameter: those of the internal faces and of the last cells along the active axis.
+    """
+    K = factors.shape[0]
+    largest = 0.0
+    for m in range(V_faces.shape[1]):
+        for i in range(V_faces.shape[2]):
+            value = factors[0] * V_faces[0, m, i]
+            for k in range(1, K):
+                value += factors[k] * V_faces[k, m, i]
+            largest = max(largest, abs(value))
+    for i in range(V_last.shape[1]):
+        value = factors[0] * V_last[0, i]
+        for k in range(1, K):
+            value += factors[k] * V_last[k, i]
+        largest = max(largest, abs(value))
     return largest

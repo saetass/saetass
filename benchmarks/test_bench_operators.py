@@ -22,6 +22,7 @@ HYPERBOLIC_VARIANTS = {
     "vanleer": {"limiter": "vanleer"},
     "mc": {"limiter": "mc"},
     "minmod-dynamic": {"limiter": "minmod", "dynamic": True},
+    "minmod-separable": {"limiter": "minmod", "dynamic": "separable"},
 }
 
 
@@ -37,6 +38,8 @@ def _run(bench, case):
 @pytest.mark.parametrize("variant", sorted(HYPERBOLIC_VARIANTS))
 @pytest.mark.parametrize("operator", ["advection", "loss"])
 def test_hyperbolic(bench, operator, variant, shape):
+    if variant.endswith("separable"):
+        pytest.importorskip("saetass.parameters")  # not in SAETASS 0.5
     bench.group = f"{operator} {'x'.join(map(str, shape))}"
     _run(bench, operator_case(operator, shape, **HYPERBOLIC_VARIANTS[variant]))
 

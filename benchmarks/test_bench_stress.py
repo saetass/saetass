@@ -3,8 +3,8 @@ Stress cases: the solver at the restrictive end of the physical parameters.
 
 Fast winds, strong magnetic fields, dense gas and momentum ranges of ten decades force
 many CFL sub-cycles per step, so these problems are slower than the ones of
-``test_bench_problems.py``. They only use the API of SAETASS 0.5, so the same file also
-measures that release. Building the solver is not
+``test_bench_problems.py``. Apart from the ``_separable`` variants, they only use the API
+of SAETASS 0.5, so the same file also measures that release. Building the solver is not
 measured; the loss rates are cached, so only the first build pays for them.
 """
 
@@ -23,6 +23,13 @@ PROBLEMS = {
     "wind_bubble_1d_stress": problems.wind_bubble_1d_stress,
     "wind_bubble_1d_stress_dynamic": lambda **kw: problems.wind_bubble_1d_stress(
         dynamic=True, **kw
+    ),
+    # The same time dependences declared as Separable parameters (not in SAETASS 0.5)
+    "electrons_2d_separable": lambda **kw: problems.electrons_2d(
+        dynamic="separable", **kw
+    ),
+    "wind_bubble_1d_stress_separable": lambda **kw: problems.wind_bubble_1d_stress(
+        dynamic="separable", **kw
     ),
     "full_2d_large": problems.full_2d_large,
     "full_2d_huge": problems.full_2d_huge,
@@ -46,6 +53,8 @@ def cfl_subcycles(problem) -> dict[str, float]:
 
 @pytest.mark.parametrize("name", list(PROBLEMS))
 def test_stress(bench, name):
+    if name.endswith("_separable"):
+        pytest.importorskip("saetass.parameters")
     build = PROBLEMS[name]
     build(n_steps=1).run()  # compile the Numba kernels outside the measurement
     problem = build()

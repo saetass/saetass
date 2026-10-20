@@ -63,8 +63,9 @@ a small difference.
 
 ### Other versions
 
-The benchmarks only use the API of SAETASS 0.5, except the sweep with `run_sweep`,
-which is skipped where it is missing, so they also measure that release. To measure another version, put its `src` first with `PYTHONPATH`
+The benchmarks only use the API of SAETASS 0.5, except the variants named `separable`
+and the sweep with `run_sweep`, which are skipped where it is missing, so they also
+measure that release. To measure another version, put its `src` first with `PYTHONPATH`
 and keep pytest from reading `pyproject.toml`, whose `pythonpath = ["src"]` would
 otherwise put the `src` of the repository first:
 

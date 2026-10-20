@@ -6,6 +6,7 @@ import numpy as np
 
 from .. import units as su
 from ..grid import Grid
+from ..parameters import CanonicalSeparable
 from ..solver import ParamSpec
 from . import hyperbolic_kernels as kernels
 from .hyperbolic_solver import HyperbolicSolver
@@ -36,7 +37,7 @@ class LossSolver(HyperbolicSolver):
         Solver configuration, already converted to canonical floats by :py:meth:`~saetass.solver.SubSolver.convert_params`. Accepted keys (and the units required at the :py:class:`~saetass.solver.Solver` level) are:
 
         P_dot : astropy.units.Quantity or callable
-            Momentum loss rate, :math:`\dot{p}`, at cell centers. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`. A callable must have signature ``P_dot(t: Quantity) -> Quantity``.
+            Momentum loss rate, :math:`\dot{p}`, at cell centers. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`. A callable must have signature ``P_dot(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
         limiter : ``{'minmod', 'vanleer', 'mc'}``
             Slope limiter used for second-order schemes.
         cfl : float
@@ -102,7 +103,10 @@ class LossSolver(HyperbolicSolver):
         # Rename loss-specific parameters to match the base class
         if "P_dot" in loss_params:
             P_dot_input = loss_params.pop("P_dot")
-            if callable(P_dot_input):
+            if isinstance(P_dot_input, CanonicalSeparable):
+                # The generalized velocity is linear in P_dot: transform each profile
+                loss_params["V_centers"] = P_dot_input.map(self._generalized_velocity)
+            elif callable(P_dot_input):
 
                 def dynamic_V_centers(t):
                     return self._generalized_velocity(P_dot_input(t))

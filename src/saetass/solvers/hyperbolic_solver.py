@@ -26,6 +26,7 @@ import numpy as np
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..parallel import reset_team, threads_for
+from ..parameters import CanonicalSeparable
 from ..solver import ParamSpec, SubSolver
 from ..state import State
 from . import hyperbolic_kernels as kernels
@@ -114,6 +115,8 @@ class HyperbolicSolver(SubSolver, ABC):
         self._init_kernel_arguments()
         #: CFL sub-cycles performed by the last call to advance().
         self._cfl_subcycles = 0
+        #: Velocities with a separable time dependence, if any (see :py:mod:`saetass.parameters`).
+        self._separable = None
 
         # Determine if V_centers is static or dynamic
         V_input = params.get("V_centers")
@@ -131,6 +134,8 @@ class HyperbolicSolver(SubSolver, ABC):
 
             # Provide an initial value just for shape/metrics purposes
             self.V_centers = self._get_V_centers(self.t_grid[0])
+            if isinstance(V_input, CanonicalSeparable):
+                self._init_separable(V_input)
 
         else:
             self.is_V_dynamic = False
@@ -209,7 +214,34 @@ class HyperbolicSolver(SubSolver, ABC):
         time_tolerance = _TIME_TOLERANCE * total_time
         kernel_rows = (values_in, U_rows, values_out)
 
-        if self.is_V_dynamic:
+        if self._separable is not None:
+            # Separable velocities: the factors of every sub-cycle first, then all the
+            # sub-cycles in a single kernel call that combines the components
+            steps, factors = [], []
+            while total_time > time_tolerance:
+                values_k = self._separable.factor_values(t_local)
+                largest = kernels.separable_largest_speed(
+                    values_k, self._separable_faces, self._separable_last
+                )
+                dt_cfl = self._cfl_dx / largest if largest > 0.0 else np.inf
+                dt_step = min(total_time, dt_cfl)
+                steps.append(dt_step)
+                factors.append(values_k)
+                total_time -= dt_step
+                t_local += dt_step
+            n_components = self._separable_centers.shape[0]
+            self._run_kernel(
+                kernel_rows,
+                self._separable_centers,
+                self._separable_faces,
+                np.array(steps),
+                load=True,
+                store=True,
+                factors=np.array(factors).reshape(len(steps), n_components),
+                combine=True,
+            )
+            self._cfl_subcycles = len(steps)
+        elif self.is_V_dynamic:
             # The velocities change with time: one kernel call per sub-cycle, loading the
             # distribution in the first and storing it in the last
             self._cfl_subcycles = 0
@@ -348,6 +380,29 @@ class HyperbolicSolver(SubSolver, ABC):
             return float(abs(V_centers[-1]))
         return float(np.max(np.abs(np.take(V_centers, indices=-1, axis=self.axis))))
 
+    def _init_separable(self, V_input: CanonicalSeparable) -> None:
+        """Components of separable velocities as kernel rows, at the centers, faces and last cells."""
+        components = [np.asarray(V, dtype=float) for V in V_input.profiles]
+        if self.axis == 0:
+            components = [V.T for V in components]
+        self._separable_centers = np.stack(
+            [self._as_rows(V, self._rows_shape) for V in components]
+        )
+        self._separable_faces = np.stack(
+            [
+                self._as_rows(
+                    self._face_generalized_velocity_interpolated(V), self._faces_shape
+                )
+                for V in components
+            ]
+        )
+        if components[0].ndim == 1:
+            last = [V[-1:] for V in components]
+        else:
+            last = [np.take(V, indices=-1, axis=self.axis) for V in components]
+        self._separable_last = np.ascontiguousarray(np.stack(last), dtype=float)
+        self._separable = V_input
+
     @staticmethod
     def _as_rows(values: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
         """Contiguous copy of ``values`` broadcast to the rows of the kernels."""
@@ -362,11 +417,14 @@ class HyperbolicSolver(SubSolver, ABC):
         load: bool,
         store: bool,
         work_factor: float = 1.0,
+        factors: np.ndarray | None = None,
+        combine: bool = False,
     ) -> None:
         """
         Advance the conservative variable through the sub-cycles ``steps``.
 
         ``work_factor`` divides the estimated work when choosing the threads, so that a call runs in parallel only if it has ``work_factor`` times the usual minimum work.
+        The velocities are the rows of a single component ``(M, N)`` or, with ``combine``, components ``(K, M, N)`` combined with ``factors`` of shape ``(len(steps), K)``.
 
         ``kernel_rows`` holds the rows of the distribution to load, of :math:`U`, and of the distribution to store; the conversions only happen when the kernels do them (:py:attr:`_KERNEL_TRANSFORM`).
         """
@@ -396,7 +454,10 @@ class HyperbolicSolver(SubSolver, ABC):
             load and transform != kernels.TRANSFORM_NONE,
             store and transform != kernels.TRANSFORM_NONE,
         )
-        kernels.advance_rows(n_threads, *arguments, n_blocks)
+        if combine:
+            kernels.advance_rows_combined(n_threads, *arguments, factors, n_blocks)
+        else:
+            kernels.advance_rows(n_threads, *arguments, n_blocks)
 
     def _unpack_params(self, params: dict = None) -> None:
         """Unpack and strictly validate parameters."""

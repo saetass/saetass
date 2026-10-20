@@ -35,7 +35,7 @@ class AdvectionSolver(HyperbolicSolver):
         Solver configuration, already converted to canonical floats by :py:meth:`~saetass.solver.SubSolver.convert_params`. Accepted keys (and the units required at the :py:class:`~saetass.solver.Solver` level) are:
 
         v_centers : astropy.units.Quantity or callable
-            Advection velocity at cell centers. Units compatible with :py:data:`~saetass.units.VELOCITY`. A callable must have signature ``v_centers(t: Quantity) -> Quantity``.
+            Advection velocity at cell centers. Units compatible with :py:data:`~saetass.units.VELOCITY`. A callable must have signature ``v_centers(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
         limiter : ``{'minmod', 'vanleer', 'mc'}``
             Slope limiter used for second-order schemes.
         cfl : float

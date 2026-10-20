@@ -9,6 +9,7 @@ for advection and loss terms, a :py:class:`~saetass.solvers.diffusion_solver.Dif
 for source terms.
 
 Operator parameters are given to the :py:class:`~saetass.solver.Solver` as physical :py:class:`~astropy.units.Quantity` objects, or as callables returning them for time-dependent parameters.
+Optionally, time dependences that are sums of fixed profiles scaled by functions of time can be declared as :py:class:`~saetass.parameters.Separable` parameters, which the advection and loss operators advance much faster when they need many sub-cycles per step (see :doc:`performance`).
 Each :py:class:`~saetass.solver.SubSolver` declares the parameters it accepts, together with their canonical units, in :py:attr:`~saetass.solver.SubSolver.PARAM_SPECS` through :py:class:`~saetass.solver.ParamSpec` entries.
 The :py:class:`~saetass.solver.Solver` converts them with :py:meth:`~saetass.solver.SubSolver.convert_params` into bare floats in the canonical units of :py:mod:`saetass.units`, so the numerical kernels never handle units, and rejects any parameter that is not declared or whose units are incompatible.
 
@@ -37,7 +38,7 @@ Hyperbolic kernels
 ~~~~~~~~~~~~~~~~~~
 
 .. automodule:: saetass.solvers.hyperbolic_kernels
-    :members: advance_rows, reciprocal_spacings, LIMITERS, LEFT_ZERO_FLUX, LEFT_EXTRAPOLATED, NS_PER_CELL
+    :members: advance_rows, advance_rows_combined, reciprocal_spacings, LIMITERS, LEFT_ZERO_FLUX, LEFT_EXTRAPOLATED, NS_PER_CELL
 
 Advection Solver
 ^^^^^^^^^^^^^^^^
