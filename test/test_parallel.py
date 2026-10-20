@@ -6,6 +6,7 @@ import pytest
 from test_solver_regression import CASES
 
 from saetass import parallel
+from saetass.solvers.diffusion_kernels import _factorize_block, solve_rows
 
 
 @pytest.fixture
@@ -250,6 +251,59 @@ def test_measured_cores_are_consistent():
     usable = parallel.usable_cores()
     assert 1 <= usable <= (parallel.os.cpu_count() or 1)
     assert parallel._busy_cpus(parallel._affinity()) >= 0.0
+
+
+def _tridiagonal(n_p=7, n=50):
+    """Diagonally dominant tridiagonal systems and a right-hand side to solve them for."""
+    rng = np.random.default_rng(3)
+    lower, upper = -rng.random((n_p, n)), -rng.random((n_p, n))
+    diag = 4.0 + rng.random((n_p, n))
+    f = rng.random((n_p, n))
+    return lower, diag, upper, f
+
+
+def _solve(kernel_call):
+    """Solve the test systems with ``kernel_call(solve_rows, *args)``."""
+    lower, diag, upper, f = _tridiagonal()
+    pivots, normalized = np.empty_like(diag), np.empty_like(diag)
+    _factorize_block(lower, diag, upper, pivots, normalized, 0, diag.shape[0])
+    out = np.empty_like(f)
+    kernel_call(
+        solve_rows,
+        f,
+        -lower,
+        diag,
+        -upper,
+        lower,
+        pivots,
+        normalized,
+        np.zeros(1),
+        True,
+        out,
+    )
+    return out
+
+
+def test_twin_kernels_are_bitwise_identical():
+    serial = _solve(lambda kernel, *args: kernel.serial(*args))
+    threaded = _solve(lambda kernel, *args: kernel.parallel(*args))
+    np.testing.assert_array_equal(serial, threaded)
+
+
+def test_twin_kernel_sets_and_restores_the_threads(monkeypatch):
+    calls = []
+    monkeypatch.setattr(parallel.numba, "get_num_threads", lambda: 6)
+    monkeypatch.setattr(parallel.numba, "set_num_threads", calls.append)
+
+    result = _solve(lambda kernel, *args: kernel(3, *args))
+    assert calls == [3, 6]
+    np.testing.assert_array_equal(
+        result, _solve(lambda kernel, *args: kernel.serial(*args))
+    )
+
+    calls.clear()
+    _solve(lambda kernel, *args: kernel(1, *args))
+    assert calls == []
 
 
 @pytest.mark.skipif(

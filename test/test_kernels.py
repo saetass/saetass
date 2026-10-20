@@ -1,5 +1,6 @@
 """
-Tests of the Numba kernels of the hyperbolic operators, and of the inputs they reject.
+Tests of the Numba kernels of the hyperbolic and diffusion operators, and of the inputs
+they reject.
 
 Coverage cannot trace code compiled by Numba, so the kernels are also run with every
 compiled function replaced by its Python source, and both must give bitwise the same
@@ -13,9 +14,11 @@ import pytest
 from numba.core.registry import CPUDispatcher
 from test_solver_regression import CASES, RTOL
 
+import saetass.solvers.diffusion_kernels as diffusion_kernels
 import saetass.solvers.hyperbolic_kernels as hyperbolic_kernels
 from saetass import (
     AdvectionSolver,
+    DiffusionSolver,
     Grid,
     LossSolver,
     Particle,
@@ -35,13 +38,17 @@ PYTHON_CASES = [
     "loss_minmod",
     "loss_gain_inflow",
     "loss_gain_inflow_order1",
+    "diffusion_dirichlet",
+    "diffusion_neumann",
+    "diffusion_outflow",
+    "diffusion_dynamic",
     "full_2d_dynamic_lie",
 ]
 
 
 def _use_python_kernels(monkeypatch):
     """Replace every compiled kernel by its Python source."""
-    for module in (hyperbolic_kernels,):
+    for module in (hyperbolic_kernels, diffusion_kernels):
         for name, value in list(vars(module).items()):
             if isinstance(value, CPUDispatcher):
                 monkeypatch.setattr(module, name, value.py_func)
@@ -212,3 +219,118 @@ def test_base_class_has_no_kernel_scales():
     subsolver, _ = _subsolver(LossSolver, two_d=False, dynamic=False)
     scale, inv_scale = HyperbolicSolver._kernel_scales(subsolver)
     assert scale.size == inv_scale.size == 0
+
+
+def test_zero_pivots_are_replaced():
+    """An exactly zero pivot is replaced by machine epsilon instead of dividing by zero."""
+    lower = np.array([0.0, 0.0, 1.0])
+    diag = np.array([0.0, 0.0, 2.0])
+    upper = np.array([1.0, 1.0, 0.0])
+    inv_pivots, normalized = np.empty((1, 3)), np.empty((1, 3))
+    diffusion_kernels._factorize_block.py_func(
+        lower[None], diag[None], upper[None], inv_pivots, normalized, 0, 1
+    )
+    eps = np.finfo(np.float64).eps
+    assert inv_pivots[0, 0] == 1.0 / eps
+    assert inv_pivots[0, 1] == 1.0 / eps
+    assert np.all(np.isfinite(normalized))
+
+
+def test_psi_end_must_match_the_momenta():
+    r, p = np.linspace(0.0, 1.0, 5), np.array([50.0, 75.0, 100.0])
+    grid = Grid(
+        r_centers=r * su.LENGTH,
+        p_centers=p * su.MOMENTUM,
+        t_grid=np.linspace(0.0, 1e-3, 3) * su.TIME,
+    )
+    state = State(grid=grid, psi_p=np.ones((3, 5)) * su.PSI_P, particle=Particle.PROTON)
+    params = {
+        "D_values": np.ones((3, 5)) * su.DIFFUSION_COEFFICIENT,
+        "psi_end": lambda t: np.zeros(2) * su.PSI_P,
+    }
+    solver = Solver(grid, state, "diffusion", {"diffusion": params})
+    with pytest.raises(ValueError, match="psi_end must have 1 or 3 values"):
+        solver.run()
+
+
+def _numpy_matrices(sub, D_values, dt):
+    """The Crank-Nicolson matrices built with NumPy array operations, the reference for the compiled assembly."""
+    D_face, G = np.empty_like(sub._D_face), np.empty_like(sub._G)
+    sub._compute_conductances(D_values, D_face, G)
+    a_left, a_right = G[:, :-1], G[:, 1:]
+    A_diag = 2.0 * sub.V_b / dt + (a_left + a_right)
+    B_diag = 2.0 * sub.V_b / dt - (a_left + a_right)
+    A_lower, B_lower = np.zeros_like(A_diag), np.zeros_like(A_diag)
+    A_upper, B_upper = np.zeros_like(A_diag), np.zeros_like(A_diag)
+    A_lower[:, 1:], B_lower[:, 1:] = -a_left[:, 1:], a_left[:, 1:]
+    A_upper[:, :-1], B_upper[:, :-1] = -a_right[:, :-1], a_right[:, :-1]
+    if sub.boundary_condition == "dirichlet":
+        for matrix in (A_lower, A_upper, B_diag, B_lower, B_upper):
+            matrix[:, -1] = 0.0
+        A_diag[:, -1] = 1.0
+    return D_face, G, A_lower, A_diag, A_upper, B_lower, B_diag, B_upper
+
+
+@pytest.mark.parametrize("python", [False, True], ids=["compiled", "python"])
+@pytest.mark.parametrize("boundary_condition", ["dirichlet", "neumann", "outflow"])
+def test_compiled_assembly_matches_numpy(boundary_condition, python, monkeypatch):
+    """The compiled assembly (and its Python source) reproduce the NumPy matrices bitwise."""
+    if python:
+        _use_python_kernels(monkeypatch)
+    r = np.array([0.0, 0.1, 0.25, 0.3, 0.5, 0.8, 1.0])
+    p = np.array([50.0, 60.0, 75.0])
+    grid = Grid(r_centers=r * su.LENGTH, p_centers=p * su.MOMENTUM)
+    rng = np.random.default_rng(7)
+    D = rng.random((3, 7)) + 0.1
+    # Infinite coefficients on both sides make a harmonic denominator vanish
+    D[1, 3:5] = np.inf
+    params = DiffusionSolver.convert_params(
+        {
+            "D_values": D * su.DIFFUSION_COEFFICIENT,
+            "boundary_condition": boundary_condition,
+        },
+        grid,
+    )
+    sub = DiffusionSolver(grid, np.array([0.0, 0.01]), params)
+    with np.errstate(divide="ignore"):
+        sub._build_matrices(0.01)
+    compiled = (
+        sub._D_face,
+        sub._G,
+        sub._A_lower,
+        sub._A_diag,
+        sub._A_upper,
+        sub._B_lower,
+        sub._B_diag,
+        sub._B_upper,
+    )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        expected = _numpy_matrices(sub, D, 0.01)
+    for got, want in zip(compiled, expected):
+        np.testing.assert_array_equal(got, want)
+
+
+def test_unknown_boundary_condition():
+    grid = Grid(r_centers=np.linspace(0.0, 1.0, 5) * su.LENGTH)
+    params = DiffusionSolver.convert_params(
+        {
+            "D_values": np.ones(5) * su.DIFFUSION_COEFFICIENT,
+            "boundary_condition": "robin",
+        },
+        grid,
+    )
+    with pytest.raises(ValueError, match="Unknown boundary_condition: robin"):
+        DiffusionSolver(grid, np.array([0.0, 0.01]), params)
+
+
+def test_dynamic_coefficients_must_match_the_grid():
+    r, p = np.linspace(0.0, 1.0, 5), np.array([50.0, 75.0, 100.0])
+    grid = Grid(
+        r_centers=r * su.LENGTH,
+        p_centers=p * su.MOMENTUM,
+        t_grid=np.linspace(0.0, 1e-3, 3) * su.TIME,
+    )
+    state = State(grid=grid, psi_p=np.ones((3, 5)) * su.PSI_P, particle=Particle.PROTON)
+    params = {"D_values": lambda t: np.ones((2, 5)) * su.DIFFUSION_COEFFICIENT}
+    with pytest.raises(ValueError, match="2D D_values must have shape"):
+        Solver(grid, state, "diffusion", {"diffusion": params})

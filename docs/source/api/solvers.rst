@@ -61,6 +61,12 @@ Diffusion solver
     :undoc-members:
     :show-inheritance:
 
+Diffusion kernels
+~~~~~~~~~~~~~~~~~
+
+.. automodule:: saetass.solvers.diffusion_kernels
+    :members: assemble_rows, solve_rows, BLOCK, BOUNDARY_CODES, ASSEMBLE_NS_PER_CELL, SOLVE_NS_PER_CELL
+
 Source solver
 ~~~~~~~~~~~~~
 
