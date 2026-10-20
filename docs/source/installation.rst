@@ -173,8 +173,11 @@ From the root of the source directory, execute:
 
 .. code-block:: bash
 
-   # Run the full suite with performance benchmarks
+   # Run the full test suite
    pytest
+
+   # Run the performance benchmarks (optional, see benchmarks/README.md)
+   pytest benchmarks
 
 A successful run will output a series of dots (representing passed tests). If any test fails with an ``AssertionError``, it typically indicates a mismatch in the underlying numerical libraries or an architecture-specific precision issue.
 

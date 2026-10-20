@@ -79,6 +79,8 @@ We welcome pull requests for:
 
    Single test files can be run with `pytest test/test_loss.py`, and the `--plot` option shows the diagnostic plots of the tests that produce them, e.g. `pytest test/test_advection.py --plot`.
 
+   Performance benchmarks live in `benchmarks/` and are not part of the suite: see [`benchmarks/README.md`](benchmarks/README.md) to run them and compare the cost of a change with the previous version.
+
 4. **Create a feature branch** for your work:
 
    ```bash
