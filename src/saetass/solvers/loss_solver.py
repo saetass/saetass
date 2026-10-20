@@ -6,7 +6,9 @@ import numpy as np
 
 from .. import units as su
 from ..grid import Grid
+from ..parameters import CanonicalSeparable
 from ..solver import ParamSpec
+from . import hyperbolic_kernels as kernels
 from .hyperbolic_solver import HyperbolicSolver
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ class LossSolver(HyperbolicSolver):
         Solver configuration, already converted to canonical floats by :py:meth:`~saetass.solver.SubSolver.convert_params`. Accepted keys (and the units required at the :py:class:`~saetass.solver.Solver` level) are:
 
         P_dot : astropy.units.Quantity or callable
-            Momentum loss rate, :math:`\dot{p}`, at cell centers. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`. A callable must have signature ``P_dot(t: Quantity) -> Quantity``.
+            Momentum loss rate, :math:`\dot{p}`, at cell centers. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`. A callable must have signature ``P_dot(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
         limiter : ``{'minmod', 'vanleer', 'mc'}``
             Slope limiter used for second-order schemes.
         cfl : float
@@ -47,9 +49,9 @@ class LossSolver(HyperbolicSolver):
         order : ``{1, 2}``
             Order of the numerical scheme.
         adiabatic_losses : bool, optional
-            If ``True``, include adiabatic losses. The key ``v_centers_physical`` must also be supplied. Default is ``False``.
+            Reserved for adiabatic losses, which are not implemented yet: ``True`` raises :py:class:`NotImplementedError`. Default is ``False``.
         v_centers_physical : astropy.units.Quantity, optional
-            Physical advection velocity at cell centres; required when ``adiabatic_losses`` is ``True``. Units compatible with :py:data:`~saetass.units.VELOCITY`.
+            Reserved for the advection velocity of adiabatic losses; it is currently ignored. Units compatible with :py:data:`~saetass.units.VELOCITY`.
     """
 
     PARAM_SPECS = MappingProxyType(
@@ -62,6 +64,8 @@ class LossSolver(HyperbolicSolver):
             "v_centers_physical": ParamSpec(su.VELOCITY),
         }
     )
+
+    _KERNEL_TRANSFORM = kernels.TRANSFORM_MOMENTUM
 
     def __init__(
         self,
@@ -90,19 +94,19 @@ class LossSolver(HyperbolicSolver):
         # Set momentum axis as the main axis for losses
         loss_params["axis"] = 0
 
-        # Add adiabatic losses
-        v_centers_physical = loss_params.pop("v_centers_physical", None)
+        loss_params.pop("v_centers_physical", None)
         if loss_params.pop("adiabatic_losses", False):
-            if v_centers_physical is None:
-                raise ValueError(
-                    "If adiabatic_losses is True, v_centers_physical must be provided."
-                )
-            self.P_dot_adiabatic = self._adiabatic_losses(grid, v_centers_physical)
+            raise NotImplementedError(
+                "Adiabatic losses are not implemented yet: set adiabatic_losses=False."
+            )
 
         # Rename loss-specific parameters to match the base class
         if "P_dot" in loss_params:
             P_dot_input = loss_params.pop("P_dot")
-            if callable(P_dot_input):
+            if isinstance(P_dot_input, CanonicalSeparable):
+                # The generalized velocity is linear in P_dot: transform each profile
+                loss_params["V_centers"] = P_dot_input.map(self._generalized_velocity)
+            elif callable(P_dot_input):
 
                 def dynamic_V_centers(t):
                     return self._generalized_velocity(P_dot_input(t))
@@ -122,6 +126,10 @@ class LossSolver(HyperbolicSolver):
 
         # Initialize the base class
         super().__init__(grid, t_grid, loss_params, **kwargs)
+
+    def _kernel_scales(self) -> tuple[np.ndarray, np.ndarray]:
+        r""":math:`U / \psi = p` and its cached inverse."""
+        return self.p_centers_phys, self._inv_p
 
     def _generalized_variable(self, f: np.ndarray, grid: Grid) -> np.ndarray:
         """
@@ -184,33 +192,3 @@ class LossSolver(HyperbolicSolver):
         P_dot = np.asarray(P_dot, dtype=float)
         inv = self._inv_p_ln10 if P_dot.ndim == 1 else self._inv_p_ln10[:, None]
         return P_dot * inv
-
-    def _adiabatic_losses(
-        self, grid: Grid, v_centers_physical: np.ndarray
-    ) -> np.ndarray:
-        r"""
-        Compute the adiabatic momentum loss rate due to spherical expansion.
-
-        The adiabatic loss term arises from the divergence of the advection velocity field and is given by
-
-        .. math::
-
-            \dot{p}_{\text{ad}} = -\frac{p}{3}\,\nabla \cdot \mathbf{v},
-
-        evaluated cell-by-cell on the spatial grid via a finite-difference approximation of the radial flux divergence.
-        """
-        r_faces = grid.r_faces.to_value(su.LENGTH)
-        A_face = 4.0 * np.pi * r_faces
-        V = (4.0 / 3.0) * np.pi * (r_faces[1:] ** 3 - r_faces[:-1] ** 3)
-
-        # TEMPORARY SOLUTION
-        N = len(grid.r_centers)
-        v_faces = np.zeros((len(self.p_centers_phys), N + 1))
-        v_faces[:, 1:N] = 0.5 * (v_centers_physical[:, :-1] - v_centers_physical[:, 1:])
-        v_faces[:, 0] = v_centers_physical[:, 0]
-        v_faces[:, -1] = v_centers_physical[:, -1]
-
-        Phi = A_face * v_faces
-        div = (Phi[:, 1:] - Phi[:, :-1]) / V
-
-        return (-self.p_centers_phys * div.T).T / 3.0 * 0

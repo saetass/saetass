@@ -9,5 +9,6 @@ API Reference
     grid
     splitting
     diagnostics
+    performance
     units
     utils

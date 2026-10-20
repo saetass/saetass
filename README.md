@@ -51,6 +51,7 @@ The package decomposes the full transport equation into independent physical ope
 | **Flexible grids** | Dedicated grid object with support for diverse spatial and momentum grid configurations |
 | **Physical accuracy** | Deep integration with `astropy.units` and `astropy.constants` for strict dimensional analysis |
 | **Extensibility** | Plug in custom diffusion coefficients, velocity fields, loss functions and source terms |
+| **Fast numerical core** | Compiled Numba kernels, multithreaded on large grids, and parallel parameter sweeps across processes |
 
 ## Installation
 

@@ -26,7 +26,23 @@ jobs:
         run: ruff check . && ruff format --check .
 
       - name: Run tests with Coverage
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
+        env:
+          NUMBA_NUM_THREADS: 1
         run: pytest --cov=saetass --cov-report=xml
+
+      - name: Run the kernels in parallel
+        # Every kernel call forced onto several threads must reproduce the serial runs
+        env:
+          NUMBA_NUM_THREADS: 4
+        run: pytest test/test_parallel.py
+
+      - name: Check that the benchmarks run
+        # Only once each: timings on shared runners are too noisy to compare
+        env:
+          NUMBA_NUM_THREADS: 1
+        run: pytest benchmarks --benchmark-disable
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -55,6 +71,8 @@ jobs:
 
       - name: Run tests against the installed package
         # Without the source tree, the tests can only import the installed package
+        env:
+          NUMBA_NUM_THREADS: 1
         run: |
           rm -rf src
           python -c "import saetass; print(saetass.__file__)"

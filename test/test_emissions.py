@@ -1,4 +1,3 @@
-import importlib.util
 from pathlib import Path
 
 import astropy.constants as const
@@ -723,51 +722,3 @@ class TestNaimaComparisons:
             rtol=0.1,
             atol=max_flux * 1e-10,
         )
-
-
-@pytest.mark.skipif(
-    importlib.util.find_spec("pytest_benchmark") is None,
-    reason="pytest-benchmark is required for performance benchmarks",
-)
-class TestEmissionPerformance:
-    """Benchmark tests to guarantee high performance on large spatial and energy grids."""
-
-    def test_large_grid_vectorized_benchmark(self, benchmark):
-        N_out = 50
-        N_cr = 1000
-        N_r = 1000
-
-        E_out_grid = np.logspace(-1, 3, N_out) * u.GeV
-        E_cr_grid = np.logspace(-1, 4, N_cr) * u.GeV
-        r_grid = np.linspace(0.1, 10, N_r) * u.pc
-        n_gas = np.ones(N_r) * u.cm**-3
-        dummy_sigma = np.ones((N_out, N_cr)) * 1e-27 * u.cm**2 / u.GeV
-        p_cr_large = (E_cr_grid / const.c).to(su.MOMENTUM)
-        grid_large = Grid(
-            r_centers=r_grid,
-            p_centers=p_cr_large,
-        )
-        state_large = State(
-            grid=grid_large,
-            psi_p=np.ones((N_cr, N_r)) * 1e-10 * su.PSI_P,
-            particle=Particle.PROTON,
-            stage_name="perf_test",
-        )
-
-        calc = EmissionCalculator(
-            E_out_grid=E_out_grid,
-            E_cr_grid=E_cr_grid,
-            r_grid=r_grid,
-            n_gas=n_gas,
-            particle="proton",
-            distance=1 * u.kpc,
-        )
-
-        flux = benchmark(
-            calc.compute_pion_decay_emission,
-            state=state_large,
-            custom_matrix=dummy_sigma,
-        )
-
-        assert flux.shape == (N_out,)
-        assert flux.unit.is_equivalent(u.cm**-2 * u.s**-1 * u.GeV**-1)

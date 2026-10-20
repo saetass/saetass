@@ -88,8 +88,7 @@ class SourceSolver(SubSolver):
         state : :py:class:`~saetass.state.State`
             Current simulation state. The differential density is updated in-place at the end of the call.
         """
-        diff_dt = float(np.diff(self.t_grid)[0])
-        total_dt = float(n_steps) * diff_dt
+        total_dt = float(n_steps) * self._dt
 
         # Process source term efficiently
         if self.is_source_dynamic:
@@ -107,7 +106,7 @@ class SourceSolver(SubSolver):
         values_new = state._values + total_dt * S
         state._update_values(values_new)
 
-        logger.debug(f"Advanced source operator by {n_steps} steps (dt={total_dt})")
+        logger.debug("Advanced source operator by %d steps (dt=%s)", n_steps, total_dt)
 
     def characteristic_scales(self, t: float, dt: float) -> CharacteristicScales:
         r"""

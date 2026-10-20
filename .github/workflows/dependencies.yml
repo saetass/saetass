@@ -57,6 +57,10 @@ jobs:
           uv pip list
 
       - name: Run tests
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
+        env:
+          NUMBA_NUM_THREADS: 1
         run: python -m pytest
 
   docs:

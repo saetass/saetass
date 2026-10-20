@@ -10,6 +10,7 @@ Hence, it serves as the central orchestrator of the simulation workflow, while d
 """
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -26,8 +27,12 @@ from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
 from .grid import Grid
+from .parameters import Separable
 from .splitting import create_splitting_scheme
 from .state import State
+
+#: Seconds between updates of the extrema shown by the progress bar, its refresh period.
+_PROGRESS_METRICS_INTERVAL = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,13 +85,24 @@ class SubSolver(ABC):
     #: Accepted user-facing parameters and their canonical units.
     PARAM_SPECS: ClassVar[Mapping[str, ParamSpec]] = MappingProxyType({})
 
+    @property
+    def t_grid(self) -> np.ndarray:
+        """Time grid of the operator, in canonical :py:data:`~saetass.units.TIME` units."""
+        return self._t_grid
+
+    @t_grid.setter
+    def t_grid(self, value: np.ndarray) -> None:
+        self._t_grid = np.asarray(value, dtype=float)
+        # advance() runs every step: difference the (long) grid once, not per call
+        self._dt = float(self._t_grid[1] - self._t_grid[0])
+
     @classmethod
     def convert_params(cls, params: Mapping[str, Any], grid: Grid) -> dict[str, Any]:
         """
         Convert user-facing parameters into the bare canonical floats consumed by this subsolver.
 
-        Physical parameters must be Quantities (or, where declared dynamic, callables returning Quantities) with units equivalent to those declared in :py:attr:`PARAM_SPECS`.
-        Dynamic callables are wrapped into ``fn(t: float) -> ndarray`` in canonical units.
+        Physical parameters must be Quantities (or, where declared dynamic, callables returning Quantities, or :py:class:`~saetass.parameters.Separable` parameters) with units equivalent to those declared in :py:attr:`PARAM_SPECS`.
+        Dynamic callables are wrapped into ``fn(t: float) -> ndarray`` in canonical units, and separable parameters into :py:class:`~saetass.parameters.CanonicalSeparable`, which is also such a callable.
 
         Parameters
         ----------
@@ -123,6 +139,10 @@ class SubSolver(ABC):
             if spec.unit is None:
                 su.require_bare(value, name)
                 converted[key] = value
+            elif isinstance(value, Separable):
+                if not spec.dynamic:
+                    raise TypeError(f"{name} does not accept a Separable.")
+                converted[key] = value.canonical(spec.unit, name)
             elif callable(value):
                 if not spec.dynamic:
                     raise TypeError(f"{name} does not accept a callable.")
@@ -366,17 +386,20 @@ class Solver:
             )
             manage_progress = True
 
+        next_metrics = 0.0
         for _ in range(n_steps):
             self.global_step += 1
 
-            val_max = np.max(self.state._values)
-            val_min = np.min(self.state._values)
-
-            self._progress.update(
-                self._task_id,
-                completed=self.global_step,
-                metrics=f"max={val_max:.4g} min={val_min:.4g}",
-            )
+            # The bar redraws a few times per second: computing the extrema of the
+            # state for every step would cost more than a step on small grids
+            update = {"completed": self.global_step}
+            now = time.monotonic()
+            if now >= next_metrics:
+                next_metrics = now + _PROGRESS_METRICS_INTERVAL
+                val_max = np.max(self.state._values)
+                val_min = np.min(self.state._values)
+                update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+            self._progress.update(self._task_id, **update)
 
             self.splitting_scheme.apply(
                 self.operator_list,
@@ -385,9 +408,10 @@ class Solver:
                 self.state,
             )
 
-        logger.debug(
-            f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
+            )
 
         if manage_progress or self.global_step >= self.total_steps:
             if self._progress is not None:

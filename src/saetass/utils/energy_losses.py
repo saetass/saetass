@@ -22,7 +22,10 @@ ________________
 """
 
 import logging
+from collections.abc import Callable, Mapping
 from enum import StrEnum
+from numbers import Real
+from typing import Any
 
 import astropy.constants as const
 import astropy.units as u
@@ -30,6 +33,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .. import units as su
+from ..parameters import Separable
 
 
 class Particle(StrEnum):
@@ -559,16 +563,32 @@ class EnergyLossCalculator:
 
         return E_dot_total * u.GeV / u.s
 
-    def get_momentum_loss_rate(self) -> np.ndarray:
-        """
+    def get_momentum_loss_rate(
+        self,
+        time_factors: Mapping[str, Callable[[u.Quantity], Any] | float] | None = None,
+    ) -> u.Quantity | Separable:
+        r"""
         Convert total energy loss rate to momentum loss rate. This is the quantity that
         ``LossSolver`` will use to compute the momentum-space losses in the transport equation.
 
+        Parameters
+        ----------
+        time_factors : mapping of str to callable or float, optional
+            Time dependence of the loss mechanisms, as factors that scale the rates computed so far: functions of the time (an :py:class:`~astropy.units.Quantity`) returning a dimensionless number, or constant numbers.
+            The keys are the names of computed mechanisms: ``"ionization"``, ``"pion"``, ``"synchrotron"``, ``"bremsstrahlung"``, ``"coulomb"`` and ``"inverse_compton"``. Mechanisms without a factor are constant.
+            For instance, synchrotron losses in a magnetic field :math:`B(t)` computed for the field ``B0`` scale as ``lambda t: (B(t) / B0) ** 2``, inverse Compton losses with the energy density of the photon field, and the gas mechanisms with the gas density (Coulomb losses only approximately, through their Coulomb logarithm).
+            Mechanisms given the same function share one profile of the result.
+            If ``None``, the losses are constant. Default is ``None``.
+
         Returns
         -------
-        P_dot_total : astropy.units.Quantity
+        P_dot_total : astropy.units.Quantity or Separable
             Momentum loss rate with shape ``(len(E_grid), len(r_grid))``. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`.
+            With ``time_factors``, a :py:class:`~saetass.parameters.Separable` with that shape, the time-dependent ``P_dot`` of ``LossSolver``.
         """
+        if time_factors is not None:
+            return self._separable_momentum_loss_rate(time_factors)
+
         # Compute total energy losses if not already done
         if self._E_dot_total is None:
             E_dot_total = self.compute_total_losses()
@@ -581,6 +601,44 @@ class EnergyLossCalculator:
         self._P_dot_total = P_dot
 
         return self._P_dot_total
+
+    def _separable_momentum_loss_rate(
+        self, time_factors: Mapping[str, Callable[[u.Quantity], Any] | float]
+    ) -> Separable:
+        """The momentum loss rate as a sum of profiles, one per distinct time factor."""
+        if not self._E_dot_components:
+            raise RuntimeError("No energy loss mechanisms have been computed.")
+        unknown = set(time_factors) - set(self._E_dot_components)
+        if unknown:
+            raise ValueError(
+                f"Time factors given for mechanisms that have not been computed: "
+                f"{sorted(unknown)}. Computed mechanisms: {sorted(self._E_dot_components)}."
+            )
+        constant = 0.0
+        factors, E_dots = [], []
+        for mechanism, E_dot in self._E_dot_components.items():
+            factor = time_factors.get(mechanism, 1.0)
+            E_dot = E_dot.to_value(u.GeV / u.s)
+            if isinstance(factor, Real):
+                constant = constant + factor * E_dot
+                continue
+            if not callable(factor):
+                raise TypeError(
+                    f"The time factor of {mechanism!r} must be a callable or a number, "
+                    f"got {type(factor).__name__}."
+                )
+            for k, known in enumerate(factors):
+                if known is factor:
+                    E_dots[k] = E_dots[k] + E_dot
+                    break
+            else:
+                factors.append(factor)
+                E_dots.append(E_dot)
+        if not np.isscalar(constant):
+            factors.append(1.0)
+            E_dots.append(constant)
+        dp_dE = self.dp_dE[:, np.newaxis]
+        return Separable([E_dot * (u.GeV / u.s) * dp_dE for E_dot in E_dots], factors)
 
     def get_loss_timescales(
         self,
