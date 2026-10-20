@@ -229,6 +229,30 @@ def energy_sweep(n_runs: int = 8, n_r: int = 600, n_steps: int = 200) -> list[Pr
     ]
 
 
+def sweep_energies(n_runs: int) -> np.ndarray:
+    """Energies of a sweep, in GeV."""
+    return np.logspace(0.0, 5.0, n_runs)
+
+
+def run_wind_bubble(energy: float, n_steps: int = 2000) -> np.ndarray:
+    """
+    Build and run one energy of the wind bubble, returning its final distribution.
+
+    A top-level function, so that the workers of :py:func:`saetass.sweep.run_sweep` can
+    import it.
+    """
+    return wind_bubble_1d(n_steps=n_steps, D=D_0 * energy ** (1.0 / 3.0)).run().copy()
+
+
+#: Steps of each run of the larger sweep benchmark.
+SWEEP_STEPS = 6000
+
+
+def run_wind_bubble_long(energy: float) -> np.ndarray:
+    """:py:func:`run_wind_bubble` with :py:data:`SWEEP_STEPS` steps, for sweep workers."""
+    return run_wind_bubble(energy, n_steps=SWEEP_STEPS)
+
+
 # ---------------------------------------------------------------------------
 # Single operators
 # ---------------------------------------------------------------------------

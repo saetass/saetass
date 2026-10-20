@@ -11,7 +11,7 @@ non-negative.
 | File | What it measures |
 |---|---|
 | `test_bench_operators.py` | One call to each operator (one CFL sub-cycle), on a 1D grid of 1000 cells and a 2D grid of 71 x 400 cells, for every order, limiter and static or time-dependent parameters. |
-| `test_bench_problems.py` | Representative problems through `Solver`, including splitting and per-step overhead: a small 1D diffusion-source problem with cheap steps, one energy of the wind bubble example (1D, 600 cells), the full equation on a 71 x 400 grid, and a sweep of independent 1D runs. |
+| `test_bench_problems.py` | Representative problems through `Solver`, including splitting and per-step overhead: a small 1D diffusion-source problem with cheap steps, one energy of the wind bubble example (1D, 600 cells), the full equation on a 71 x 400 grid, a sweep of independent 1D runs, and a larger sweep run serially and with `saetass.sweep.run_sweep`. |
 | `test_bench_stress.py` | Stress cases at the restrictive end of the physical parameters (3000 km/s wind, 100 uG field, dense gas, ten decades of momentum, up to tens of thousands of CFL sub-cycles per step): electrons and protons on the full equation, electron cooling, a fast 1D wind bubble, static and time-dependent, and two large grids for thread scaling. Slower than the other files. |
 | `test_bench_emissions.py` | Every emission mechanism end to end with its cross-section model, and the two integrations over the distribution on large grids. |
 | `problems.py` | The problems, shared with `profile_problem.py`. |
@@ -63,7 +63,8 @@ a small difference.
 
 ### Other versions
 
-The benchmarks only use the API of SAETASS 0.5, so they also measure that release. To measure another version, put its `src` first with `PYTHONPATH`
+The benchmarks only use the API of SAETASS 0.5, except the sweep with `run_sweep`,
+which is skipped where it is missing, so they also measure that release. To measure another version, put its `src` first with `PYTHONPATH`
 and keep pytest from reading `pyproject.toml`, whose `pythonpath = ["src"]` would
 otherwise put the `src` of the repository first:
 
