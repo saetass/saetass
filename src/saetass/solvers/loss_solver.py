@@ -7,6 +7,7 @@ import numpy as np
 from .. import units as su
 from ..grid import Grid
 from ..solver import ParamSpec
+from . import hyperbolic_kernels as kernels
 from .hyperbolic_solver import HyperbolicSolver
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,8 @@ class LossSolver(HyperbolicSolver):
             "v_centers_physical": ParamSpec(su.VELOCITY),
         }
     )
+
+    _KERNEL_TRANSFORM = kernels.TRANSFORM_MOMENTUM
 
     def __init__(
         self,
@@ -119,6 +122,10 @@ class LossSolver(HyperbolicSolver):
 
         # Initialize the base class
         super().__init__(grid, t_grid, loss_params, **kwargs)
+
+    def _kernel_scales(self) -> tuple[np.ndarray, np.ndarray]:
+        r""":math:`U / \psi = p` and its cached inverse."""
+        return self.p_centers_phys, self._inv_p
 
     def _generalized_variable(self, f: np.ndarray, grid: Grid) -> np.ndarray:
         """

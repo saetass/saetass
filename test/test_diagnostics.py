@@ -58,10 +58,8 @@ def test_advection_courant_number_and_timescale(plot_results):
 
     # The reported sub-cycles are those the solver actually performs per step
     subsolver = solver.operator_subsolvers[0]
-    fluxes, calls = subsolver._compute_second_order_fluxes, []
-    subsolver._compute_second_order_fluxes = lambda *a: calls.append(1) or fluxes(*a)
     solver.step(1)
-    assert len(calls) == diag.numbers["cfl_subcycles"]
+    assert subsolver._cfl_subcycles == diag.numbers["cfl_subcycles"]
 
     if plot_results:
         plt.figure(figsize=(10, 6))
@@ -70,7 +68,7 @@ def test_advection_courant_number_and_timescale(plot_results):
         plt.title(
             f"Advection over one step: Courant number "
             f"{diag.numbers['courant_number']:.2f}, "
-            f"{len(calls)} CFL sub-cycles"
+            f"{subsolver._cfl_subcycles} CFL sub-cycles"
         )
         plt.xlabel("r [pc]")
         plt.legend()

@@ -7,6 +7,7 @@ import numpy as np
 from .. import units as su
 from ..grid import Grid
 from ..solver import ParamSpec
+from . import hyperbolic_kernels as kernels
 from .hyperbolic_solver import HyperbolicSolver
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,10 @@ class AdvectionSolver(HyperbolicSolver):
         }
     )
 
+    # Limiting the quadratic r^2 profile of U would clip the slopes: limit f = U / r^2
+    _SPHERICAL_SLOPES = True
+    _KERNEL_TRANSFORM = kernels.TRANSFORM_SPHERICAL
+
     def __init__(
         self,
         grid: Grid,
@@ -73,6 +78,17 @@ class AdvectionSolver(HyperbolicSolver):
 
         # Initialize the base class
         super().__init__(grid, t_grid, hyperbolic_params, **kwargs)
+        if self.N < 3 and self.r_centers[0] == 0.0:
+            raise ValueError(
+                "Advection from r = 0 needs at least 3 radial cells to extrapolate the origin."
+            )
+
+    def _kernel_scales(self) -> tuple[np.ndarray, np.ndarray]:
+        r""":math:`U / \psi = r^2` and its inverse, zero at :math:`r = 0` (the origin cell is extrapolated)."""
+        r2 = self.r_centers**2
+        inv_r2 = np.zeros_like(r2)
+        inv_r2[r2 != 0.0] = 1.0 / r2[r2 != 0.0]
+        return r2, inv_r2
 
     def _generalized_variable(self, f: np.ndarray, grid: Grid) -> np.ndarray:
         """
@@ -115,25 +131,6 @@ class AdvectionSolver(HyperbolicSolver):
             f[..., 0] = 2.0 * f[..., 1] - f[..., 2]
 
         return f
-
-    def _compute_slopes(self, U: np.ndarray) -> np.ndarray:
-        """
-        Compute limited slopes in conservative-variable space, accounting for the spherical-geometry transformation.
-
-        Overrides parent method to avoid excessive limiter clipping on the quadratic r^2 profile.
-        """
-        # 1. Recover mathematically exact primitive profile
-        f = self._inverse_generalized_variable(U, self.grid)
-
-        # 2. Compute well-behaved limited slopes on the flat/linear primitive f
-        slopes_f = super()._compute_slopes(f)
-
-        # 3. Map back to conservative variable slopes: dU/dr = 2rf + r^2(df/dr)
-        r = self.r_centers
-        shape = (1,) * (U.ndim - 1) + r.shape
-        r_b = r.reshape(shape)
-
-        return 2.0 * r_b * f + (r_b**2) * slopes_f
 
     def _check_grid_state_consistency(
         self, grid: Grid, state_array: np.ndarray

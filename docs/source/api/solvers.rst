@@ -33,6 +33,12 @@ Hyperbolic solver
     :members:
     :show-inheritance:
 
+Hyperbolic kernels
+~~~~~~~~~~~~~~~~~~
+
+.. automodule:: saetass.solvers.hyperbolic_kernels
+    :members: advance_rows, reciprocal_spacings, LIMITERS, LEFT_ZERO_FLUX, LEFT_EXTRAPOLATED, NS_PER_CELL
+
 Advection Solver
 ^^^^^^^^^^^^^^^^
 .. automodule:: saetass.solvers.advection_solver

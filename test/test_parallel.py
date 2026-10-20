@@ -1,6 +1,9 @@
 """Tests of the thread management of the kernels in ``saetass.parallel``."""
 
+import numba
+import numpy as np
 import pytest
+from test_solver_regression import CASES
 
 from saetass import parallel
 
@@ -73,6 +76,12 @@ def test_team_size(cores, max_threads):
     assert parallel.team_size() == 32
     assert parallel.team_size(0.0) == 2  # at least two threads
     assert parallel.team_size(4 * parallel.MIN_WORK_PER_THREAD_NS) == 4
+
+
+def test_operators_start_a_new_team(monkeypatch):
+    monkeypatch.setattr(parallel, "_team_work_ns", 1e12)
+    CASES[sorted(CASES)[0]]()
+    assert parallel._team_work_ns < 1e12
 
 
 def test_team_leaves_busy_cores_free(cores, monkeypatch, max_threads):
@@ -241,3 +250,18 @@ def test_measured_cores_are_consistent():
     usable = parallel.usable_cores()
     assert 1 <= usable <= (parallel.os.cpu_count() or 1)
     assert parallel._busy_cpus(parallel._affinity()) >= 0.0
+
+
+@pytest.mark.skipif(
+    numba.config.NUMBA_NUM_THREADS < 2, reason="needs NUMBA_NUM_THREADS >= 2"
+)
+@pytest.mark.parametrize("case", sorted(CASES))
+def test_parallel_runs_match_serial_runs(case, monkeypatch, max_threads):
+    """Forcing every kernel call to run in parallel does not change any result."""
+    parallel.set_max_threads(1)
+    serial = CASES[case]()
+
+    parallel.set_max_threads(numba.config.NUMBA_NUM_THREADS)
+    monkeypatch.setattr(parallel, "MIN_PARALLEL_WORK_NS", 0.0)
+    threaded = CASES[case]()
+    np.testing.assert_array_equal(threaded, serial)

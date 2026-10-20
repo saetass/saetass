@@ -9,6 +9,7 @@ where :math:`V(t,y)` is a generalized velocity that can depend on time and on th
 It supports both first-order upwind and second-order MUSCL-Hancock schemes with various slope limiters (minmod, van Leer, MC) to ensure stability and non-oscillatory behavior.
 The solver can handle both 1D and 2D problems by treating the secondary axis as independent slices.
 It automatically computes stable time steps based on the CFL condition and updates the associated :py:class:`~saetass.state.State` object accordingly.
+The finite volume update itself runs in the fused, compiled kernels of :py:mod:`~saetass.solvers.hyperbolic_kernels`, one pass over each row of the grid per CFL sub-cycle.
 
 This class serves as a flexible base for specific hyperbolic problems, such as advection or loss terms, by defining the appropriate generalized variable transformations and velocity fields.
 Thus, :py:class:`~saetass.solvers.advection_solver.AdvectionSolver` and :py:class:`~saetass.solvers.loss_solver.LossSolver` inherit from this base class and implement the problem-specific logic while reusing the core finite volume update mechanism.
@@ -21,64 +22,24 @@ from types import MappingProxyType
 from typing import Literal
 
 import numpy as np
-from numba import njit, prange
 
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
+from ..parallel import reset_team, threads_for
 from ..solver import ParamSpec, SubSolver
 from ..state import State
+from . import hyperbolic_kernels as kernels
 
 logger = logging.getLogger(__name__)
 
 #: Fraction of a step below which the remaining time of a CFL sub-cycling loop is rounding residue.
 _TIME_TOLERANCE = 1e-12
 
-
-# The limiters compare signs instead of testing products such as ``a * b > 0``: a
-# product squares the magnitude of the slopes, so it underflows to zero (silently
-# dropping the scheme to first order) or overflows for slopes beyond ~1e+-154, which
-# would make the kernels depend on the units in which U is expressed.
-
-
-@njit(parallel=True, fastmath=True)
-def _minmod_multi_arr(A, B, C):
-    a = np.asarray(A)
-    b = np.asarray(B)
-    c = np.asarray(C)
-    out = np.empty_like(a)
-    n = a.size
-    for i in prange(n):
-        ai, bi, ci = a.flat[i], b.flat[i], c.flat[i]
-        if (ai > 0.0 and bi > 0.0 and ci > 0.0) or (ai < 0.0 and bi < 0.0 and ci < 0.0):
-            s = 1.0 if ai > 0 else -1.0
-            out.flat[i] = s * min(abs(ai), abs(bi), abs(ci))
-        else:
-            out.flat[i] = 0.0
-    return out
-
-
-def _minmod_multi(a, b, c):
-
-    if np.isscalar(a) and np.isscalar(b) and np.isscalar(c):
-        if (a > 0.0 and b > 0.0 and c > 0.0) or (a < 0.0 and b < 0.0 and c < 0.0):
-            s = 1.0 if a > 0 else -1.0
-            return s * min(abs(a), abs(b), abs(c))
-        else:
-            return 0.0
-
-    return _minmod_multi_arr(a, b, c)
-
-
-def _vanleer(a, b):
-    """
-    Van Leer limited slope, the harmonic mean ``2ab / (a + b)`` of same-sign slopes and zero otherwise.
-
-    It is evaluated as ``2 sign(a) |a| (|b| / (|a| + |b|))`` so that no intermediate value squares the magnitude of the slopes.
-    """
-    abs_a, abs_b = np.abs(a), np.abs(b)
-    same_sign = ((a > 0.0) & (b > 0.0)) | ((a < 0.0) & (b < 0.0))
-    total = np.where(same_sign, abs_a + abs_b, np.inf)
-    return np.where(same_sign, np.copysign(2.0 * abs_a * (abs_b / total), a), 0.0)
+#: Factor on the work a single sub-cycle of time-dependent velocities needs to use threads.
+#: Each such call alternates with serial NumPy work (the user callable, the interpolation
+#: to faces, the CFL step), which runs slower in a process whose threads just ran; with
+#: short parallel calls, threads made these runs slower than serial ones.
+_DYNAMIC_PARALLEL_FACTOR = 10.0
 
 
 class HyperbolicSolver(SubSolver, ABC):
@@ -123,6 +84,19 @@ class HyperbolicSolver(SubSolver, ABC):
         {"limiter": ParamSpec(), "cfl": ParamSpec(), "order": ParamSpec()}
     )
 
+    #: Whether slopes are limited on :math:`U / r^2` instead of :math:`U` (spherical advection).
+    _SPHERICAL_SLOPES = False
+
+    #: How the kernels convert between the distribution and the conservative variable
+    #: :math:`U`, a ``TRANSFORM_*`` code of :py:mod:`~saetass.solvers.hyperbolic_kernels`.
+    #: :py:class:`~saetass.solvers.advection_solver.AdvectionSolver` (:math:`U = r^2 \psi`)
+    #: and :py:class:`~saetass.solvers.loss_solver.LossSolver` (:math:`U = p\,\psi`) set their
+    #: own code, so that the kernels convert as they read and write the distribution. The
+    #: default, ``TRANSFORM_NONE``, is for other subclasses, whose conservative variable
+    #: the kernels do not know: :py:meth:`advance` then converts with
+    #: :py:meth:`_generalized_variable` and :py:meth:`_inverse_generalized_variable`.
+    _KERNEL_TRANSFORM = kernels.TRANSFORM_NONE
+
     def __init__(
         self,
         grid: Grid,
@@ -131,10 +105,15 @@ class HyperbolicSolver(SubSolver, ABC):
         **kwargs,
     ) -> None:
         self._validate_unit_free_inputs(t_grid, params)
+        # Size the threads of the kernels by the calls of this simulation
+        reset_team()
         self._unpack_params(params)
         self._unpack_grid(grid)
         self.t_grid = np.asarray(t_grid, dtype=float)
         self.params = params or {}
+        self._init_kernel_arguments()
+        #: CFL sub-cycles performed by the last call to advance().
+        self._cfl_subcycles = 0
 
         # Determine if V_centers is static or dynamic
         V_input = params.get("V_centers")
@@ -166,6 +145,8 @@ class HyperbolicSolver(SubSolver, ABC):
             )
             self._get_V_centers = lambda t: self.V_centers_static
             self._dt_cfl_static = float(self._compute_dt(V_faces=self.V_faces_static))
+            self._V_centers_rows = self._as_rows(self.V_centers, self._rows_shape)
+            self._V_faces_rows = self._as_rows(self.V_faces_static, self._faces_shape)
 
     @property
     def _main_centers(self) -> np.ndarray:
@@ -199,8 +180,8 @@ class HyperbolicSolver(SubSolver, ABC):
         The inner loop may subdivide each requested step further to satisfy the CFL stability condition, so the number of actual flux evaluations can exceed ``n_steps``.
         The total elapsed time is always exactly ``n_steps * dt``, where ``dt`` is the time step size inferred from :py:attr:`~saetass.solvers.hyperbolic_solver.HyperbolicSolver.t_grid`.
 
-        .. note:
-            A positivity floor :math:`U(t,y)\geq 0` is enforced after the update to suppress negatives that may arise at steep gradient fronts when using the MUSCL-Hancock scheme.
+        .. note::
+            A positivity floor :math:`\psi \geq 0` is enforced after the update to suppress negatives that may arise at steep gradient fronts when using the MUSCL-Hancock scheme.
 
         Parameters
         ----------
@@ -210,62 +191,213 @@ class HyperbolicSolver(SubSolver, ABC):
             Current simulation state. The differential density is updated in-place at the end of the call.
         """
         values = np.asarray(state._get_values(), dtype=float)
-        if self.axis == 0:
-            values = values.T
+        if self._KERNEL_TRANSFORM == kernels.TRANSFORM_NONE:
+            U = self._generalized_variable(
+                values.T if self.axis == 0 else values, self.grid
+            )
+            U_rows = np.ascontiguousarray(U).reshape(self._rows_shape)
+            values_in = values_out = U_rows  # unused by the kernels
+        else:
+            # The kernels read and write the rows of the state directly
+            values_new = np.empty_like(values)
+            values_in, values_out = self._rows(values), self._rows(values_new)
+            U_rows = np.empty(self._rows_shape)
 
-        U = self._generalized_variable(values, self.grid)
-
-        dx = self.dx if self.M is None else self.dx[None, :]
-
-        dt_requested = self._dt
-        total_time = float(n_steps) * dt_requested
+        total_time = float(n_steps) * self._dt
         t_local = state.t_val
         # Remaining time below this relative tolerance is rounding residue, not a step to take
         time_tolerance = _TIME_TOLERANCE * total_time
+        kernel_rows = (values_in, U_rows, values_out)
 
-        while total_time > time_tolerance:
-            V_centers, V_faces = self._get_velocities(t_local)
-            dt_cfl = (
-                float(self._compute_dt(V_faces=V_faces))
-                if self.is_V_dynamic
-                else self._dt_cfl_static
-            )
-            dt_step = min(total_time, dt_cfl)
-
-            if self.order == 1:
-                F = self._compute_first_order_fluxes(U, V_centers, V_faces)
-            elif self.order == 2:
-                F = self._compute_second_order_fluxes(
-                    U, self.V_centers, V_faces, dt_step
+        if self.is_V_dynamic:
+            # The velocities change with time: one kernel call per sub-cycle, loading the
+            # distribution in the first and storing it in the last
+            self._cfl_subcycles = 0
+            while total_time > time_tolerance:
+                self.V_centers = self._get_V_centers(t_local)
+                V_rows = self._as_rows(self.V_centers, self._rows_shape)
+                # Faces and CFL step in one compiled pass, with the arithmetic of
+                # _face_generalized_velocity_interpolated and _compute_dt
+                largest = kernels.faces_and_max(
+                    V_rows, *self._face_weights, self._faces_buffer
                 )
-                # Use numba for performance test
-                # F = _numba_second_order_fluxes_core(
-                #     U,
-                #     self.V_centers,
-                #     V_faces,
-                #     self._main_centers,
-                #     self._main_faces,
-                #     dt_step,
-                #     0,
-                # )
-            else:
-                raise NotImplementedError("order must be 1 or 2")
+                largest = max(largest, self._last_center_speed(self.V_centers))
+                dt_cfl = self._cfl_dx / largest if largest > 0.0 else np.inf
+                dt_step = min(total_time, dt_cfl)
+                self._run_kernel(
+                    kernel_rows,
+                    V_rows,
+                    self._faces_buffer,
+                    np.array([dt_step]),
+                    load=self._cfl_subcycles == 0,
+                    store=total_time - dt_step <= time_tolerance,
+                    work_factor=_DYNAMIC_PARALLEL_FACTOR,
+                )
+                total_time -= dt_step
+                t_local += dt_step
+                self._cfl_subcycles += 1
+            if self._cfl_subcycles == 0:
+                self._run_kernel(
+                    kernel_rows,
+                    self._as_rows(self.V_centers, self._rows_shape),
+                    self._as_rows(
+                        self._face_generalized_velocity_interpolated(self.V_centers),
+                        self._faces_shape,
+                    ),
+                    np.empty(0),
+                    load=True,
+                    store=True,
+                )
+        else:
+            # Static velocities: every sub-cycle in a single kernel call
+            steps = []
+            while total_time > time_tolerance:
+                dt_step = min(total_time, self._dt_cfl_static)
+                steps.append(dt_step)
+                total_time -= dt_step
+            self._run_kernel(
+                kernel_rows,
+                self._V_centers_rows,
+                self._V_faces_rows,
+                np.array(steps),
+                load=True,
+                store=True,
+            )
+            self._cfl_subcycles = len(steps)
 
-            U = U - (dt_step / dx) * (F[..., 1:] - F[..., :-1])
-            total_time -= dt_step
-            t_local += dt_step
-
-        values_new = self._inverse_generalized_variable(U, self.grid)
-
-        # Positivity floor: MUSCL-Hancock is TVD but not strictly positive-definite;
-        # clip machine-precision negatives that arise at steep gradient fronts.
-        values_new = np.maximum(values_new, 0.0)
-        state._update_values(values_new.T if self.axis == 0 else values_new)
+        if self._KERNEL_TRANSFORM == kernels.TRANSFORM_NONE:
+            U = U_rows.reshape(U.shape)
+            values_new = self._inverse_generalized_variable(U, self.grid)
+            # Positivity floor: MUSCL-Hancock is TVD but not strictly positive-definite;
+            # clip machine-precision negatives that arise at steep gradient fronts.
+            values_new = np.maximum(values_new, 0.0)
+            if self.axis == 0:
+                values_new = values_new.T
+        state._update_values(values_new)
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"max(|values|) after step: {np.max(np.abs(values_new)):.4g}")
 
     # ---------------- internal helpers ----------------
+    def _init_kernel_arguments(self) -> None:
+        """Arrays and options of the fused kernels that do not change between calls."""
+        rows = 1 if self.M is None else self.M
+        self._rows_shape = (rows, self.N)
+        # Weights of the interpolation of the velocities to the internal faces, which
+        # run every sub-cycle when the velocities depend on time
+        dist_left, dist_right = self.dx_L[1:], self.dx_R[:-1]
+        denom = dist_left + dist_right
+        self._face_weights = (
+            dist_left,
+            dist_right,
+            np.where(denom == 0.0, 1.0, denom),
+        )
+        self._faces_shape = (rows, max(self.N - 1, 0))
+        # Faces of time-dependent velocities, refilled every sub-cycle
+        self._faces_buffer = np.empty(self._faces_shape)
+        self._cfl_dx = float(self.cfl * np.min(self.dx))
+        centers = np.ascontiguousarray(self._main_centers)
+        if self._SPHERICAL_SLOPES:
+            r, r2 = centers, centers**2
+        else:
+            r = r2 = np.empty(0)
+        scale, inv_scale = self._kernel_scales()
+        self._kernel_geometry = (
+            centers,
+            np.ascontiguousarray(self._main_faces),
+            kernels.reciprocal_spacings(
+                centers,
+                np.asarray(self.dx, dtype=float),
+                r2 if self._SPHERICAL_SLOPES else None,
+            ),
+            np.ascontiguousarray(self.dx_L),
+            np.ascontiguousarray(self.dx_R),
+            r,
+            r2,
+            np.ascontiguousarray(scale, dtype=float),
+            np.ascontiguousarray(inv_scale, dtype=float),
+        )
+        if self.axis == 1 and self._main_faces[0] <= 0.0:
+            self._left_mode = kernels.LEFT_ZERO_FLUX  # symmetry at r = 0
+        elif self.axis == 0:
+            self._left_mode = kernels.LEFT_EXTRAPOLATED  # momentum inflow
+        else:
+            self._left_mode = None
+        if self.inflow_value_U.size not in (1, rows):
+            raise ValueError(
+                f"inflow_value_U must have 1 or {rows} values, got {self.inflow_value_U.size}."
+            )
+
+    def _kernel_scales(self) -> tuple[np.ndarray, np.ndarray]:
+        r"""
+        :math:`U / \psi` along the active axis and its inverse, for the conversion done by the kernels.
+
+        Only used when :py:attr:`_KERNEL_TRANSFORM` is not ``TRANSFORM_NONE``.
+        """
+        return np.empty(0), np.empty(0)
+
+    def _rows(self, values: np.ndarray) -> np.ndarray:
+        """View of the distribution as the rows of the kernels, the active axis last."""
+        if values.ndim == 1:
+            return values.reshape(self._rows_shape)
+        return values.T if self.axis == 0 else values
+
+    def _last_center_speed(self, V_centers: np.ndarray) -> float:
+        """Largest speed of the last cells along the active axis, as in :py:meth:`_compute_dt`."""
+        if V_centers.ndim == 1:
+            return float(abs(V_centers[-1]))
+        return float(np.max(np.abs(np.take(V_centers, indices=-1, axis=self.axis))))
+
+    @staticmethod
+    def _as_rows(values: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+        """Contiguous copy of ``values`` broadcast to the rows of the kernels."""
+        return np.ascontiguousarray(np.broadcast_to(values, shape), dtype=float)
+
+    def _run_kernel(
+        self,
+        kernel_rows: tuple[np.ndarray, np.ndarray, np.ndarray],
+        V_centers: np.ndarray,
+        V_faces: np.ndarray,
+        steps: np.ndarray,
+        load: bool,
+        store: bool,
+        work_factor: float = 1.0,
+    ) -> None:
+        """
+        Advance the conservative variable through the sub-cycles ``steps``.
+
+        ``work_factor`` divides the estimated work when choosing the threads, so that a call runs in parallel only if it has ``work_factor`` times the usual minimum work.
+
+        ``kernel_rows`` holds the rows of the distribution to load, of :math:`U`, and of the distribution to store; the conversions only happen when the kernels do them (:py:attr:`_KERNEL_TRANSFORM`).
+        """
+        if self.order == 2 and self._left_mode is None:
+            raise ValueError("Invalid left face position for the given axis.")
+        values_in, U_rows, values_out = kernel_rows
+        transform = self._KERNEL_TRANSFORM
+        work_ns = U_rows.size * max(steps.size, 1) * kernels.NS_PER_CELL[self.order]
+        work_ns /= work_factor
+        n_threads = threads_for(U_rows.shape[0], work_ns)
+        # A few blocks of rows per thread balance the threads; serially, a single block
+        n_blocks = 1 if n_threads == 1 else min(U_rows.shape[0], 4 * n_threads)
+        arguments = (
+            values_in,
+            U_rows,
+            values_out,
+            V_centers,
+            V_faces,
+            *self._kernel_geometry,
+            self.inflow_value_U,
+            steps,
+            self.order,
+            kernels.LIMITERS[self.limiter],
+            self._left_mode or kernels.LEFT_ZERO_FLUX,
+            self._SPHERICAL_SLOPES,
+            transform,
+            load and transform != kernels.TRANSFORM_NONE,
+            store and transform != kernels.TRANSFORM_NONE,
+        )
+        kernels.advance_rows(n_threads, *arguments, n_blocks)
+
     def _unpack_params(self, params: dict = None) -> None:
         """Unpack and strictly validate parameters."""
         # expected keys
@@ -393,31 +525,13 @@ class HyperbolicSolver(SubSolver, ABC):
         if self.N <= 1:
             return np.zeros(0)
 
-        V = V_centers
-
-        # Distances from face to neighboring centers
-        dist_left = self.dx_L
-        dist_right = self.dx_R
-
-        V_left = V[..., :-1]
-        V_right = V[..., 1:]
-
-        dist_left_b = (
-            np.tile(dist_left[1:], (V.shape[0], 1)) if V.ndim == 2 else dist_left[1:]
-        )
-        dist_right_b = (
-            np.tile(dist_right[:-1], (V.shape[0], 1))
-            if V.ndim == 2
-            else dist_right[:-1]
-        )
-
-        # Compute interpolation denominator safely
-        denom = dist_left_b + dist_right_b
-        denom = np.where(denom == 0.0, 1.0, denom)
+        # Distances from each internal face to its two centers, broadcast over the rows
+        dist_left, dist_right, denom = self._face_weights
+        V_left = V_centers[..., :-1]
+        V_right = V_centers[..., 1:]
 
         # Linear interpolation: closer center gets higher weight
-        V_face = (V_left * dist_right_b + V_right * dist_left_b) / denom
-        return V_face
+        return (V_left * dist_right + V_right * dist_left) / denom
 
     def _compute_dt(
         self, V_faces: np.ndarray = None, V_centers: np.ndarray = None
@@ -503,236 +617,6 @@ class HyperbolicSolver(SubSolver, ABC):
         """Characteristic timescale of the operator for the given velocities, if it has one."""
         return None
 
-    def _get_velocities(self, t: float) -> tuple[np.ndarray, np.ndarray]:
-        """Return the current generalized velocities at centers and faces."""
-        if self.is_V_dynamic:
-            self.V_centers = self._get_V_centers(t)
-            V_faces = self._face_generalized_velocity_interpolated(self.V_centers)
-            return self.V_centers, V_faces
-        return self.V_centers_static, self.V_faces_static
-
-    def _compute_first_order_fluxes(
-        self,
-        U: np.ndarray,
-        V_centers: np.ndarray,
-        V_faces: np.ndarray,
-    ) -> np.ndarray:
-        """
-        Compute first-order upwind fluxes at faces given conservative variable U and face generalized velocities for 2D case.
-        Returns flux matrix with length N+1 on axis and M on other_axis.
-        """
-        U_left = U[..., :-1]
-        U_right = U[..., 1:]
-        flux_int = np.where(V_faces >= 0.0, V_faces * U_left, V_faces * U_right)
-
-        F = np.empty((*U.shape[:-1], U.shape[-1] + 1), dtype=float)
-        F[..., 0] = 0.0
-        F[..., 1:-1] = flux_int
-        # Outflow/inflow at right boundary: upwind using last cell velocity
-        V_last = np.take(V_centers, -1, axis=-1)  # shape (...,) — works 1D and 2D
-        U_last = np.take(U, -1, axis=-1)
-        F[..., -1] = U_last * np.where(V_last >= 0.0, V_last, self.inflow_value_U)
-
-        return F
-
-    def _compute_second_order_fluxes(
-        self,
-        U: np.ndarray,
-        V_centers: np.ndarray,
-        V_faces: np.ndarray,
-        dt: float,
-    ) -> np.ndarray:
-        """
-        Compute second-order MUSCL-Hancock fluxes at faces given conservative generalized variable U and face generalized velocities for 2D case.
-        Returns flux matrix with length N+1 on axis and M on other_axis.
-        """
-        if self.axis == 0:
-            # For debugging breakpoints
-            logger.debug("Computing 2D second-order fluxes along r-axis")
-        # 1) compute slopes for W in non-uniform grid (minmod / vanleer)
-        slopes_U = self._compute_slopes(U)  # shape (N,M) or (M,N)
-        # 2) reconstruct left/right states at internal faces (t^n)
-        UL, UR = self._recontruct_face_states(U, slopes_U)
-        F_centers = V_centers * U  # flux at cell centers (for predictor step)
-        slopes_F = self._compute_slopes(F_centers)
-        # 3) predictor to t^{n+1/2}
-
-        ULh, URh = self._predictor_states(UL, UR, slopes_F, dt)
-        # 4) compute V at internal faces and fluxes by upwind using sign of V_face
-        flux_int = np.where(
-            V_faces >= 0.0, V_faces * ULh[..., 1:-1], V_faces * URh[..., 1:-1]
-        )
-
-        F = np.empty((*U.shape[:-1], U.shape[-1] + 1), dtype=float)
-        F[..., 1:-1] = flux_int
-        F[..., 0], F[..., -1] = self._boundary_fluxes(
-            U, ULh, URh, V_centers, slopes_U, dt
-        )
-
-        return F
-
-    def _compute_slopes(self, U: np.ndarray) -> np.ndarray:
-        """
-        Compute limited slopes on non-uniform grid for 2D case.
-        We'll compute left derivative, right derivative, and central derivative
-        with correct Δr factors, then apply the chosen limiter.
-        """
-        N = self.N
-        slopes = np.zeros_like(U)
-        if N <= 2:
-            return slopes
-
-        centers = self._main_centers
-
-        # left derivative at i (using centers i-1 and i)
-        dL = (U[..., 1:-1] - U[..., :-2]) / (centers[1:-1] - centers[:-2])  # length N-2
-        # right derivative at i (using centers i and i+1)
-        dR = (U[..., 2:] - U[..., 1:-1]) / (centers[2:] - centers[1:-1])  # length N-2
-        # central derivative across two cells
-        dC = (U[..., 2:] - U[..., :-2]) / (centers[2:] - centers[:-2])  # length N-2
-
-        if self.limiter == "minmod":
-            slopes_interior = _minmod_multi(dL, dR, dC)
-        elif self.limiter == "vanleer":  # generalized
-            slopes_interior = _vanleer(dL, dR)
-        elif self.limiter == "mc":
-            slopes_interior = _minmod_multi(2.0 * dL, 2.0 * dR, 0.5 * dC)
-        else:  # should not happen due to earlier check, but just in case
-            raise NotImplementedError("limiter must be 'minmod', 'vanleer' or 'mc'")
-        # Assign slopes to correct slices
-        slopes[..., 1:-1] = slopes_interior
-
-        # TEMPORARY SOLUTION
-        # Left boundary i=0 : forward/backward differences built with same center spacing
-        d_fwd = (U[..., 1] - U[..., 0]) / (centers[1] - centers[0])  # forward 1-step
-        d_fwd2 = (U[..., 2] - U[..., 0]) / (
-            centers[2] - centers[0]
-        )  # two-cell centred forward
-
-        if self.limiter == "minmod":
-            slopes[..., 0] = _minmod_multi(d_fwd, d_fwd2, d_fwd)
-        elif self.limiter == "vanleer":
-            slopes[..., 0] = _vanleer(d_fwd, d_fwd2)
-        elif self.limiter == "mc":
-            slopes[..., 0] = _minmod_multi(2.0 * d_fwd, 2.0 * d_fwd2, 0.5 * d_fwd2)
-        else:
-            slopes[..., 0] = d_fwd  # fallback (shouldn't happen)
-
-        # Right boundary i=N-1 : backward / two-cell centred backward
-        d_bwd = (U[..., -1] - U[..., -2]) / (
-            centers[-1] - centers[-2]
-        )  # backward 1-step
-        d_bwd2 = (U[..., -1] - U[..., -3]) / (
-            centers[-1] - centers[-3]
-        )  # two-cell centred backward
-
-        if self.limiter == "minmod":
-            slopes[..., -1] = _minmod_multi(d_bwd, d_bwd2, d_bwd)
-        elif self.limiter == "vanleer":
-            slopes[..., -1] = _vanleer(d_bwd, d_bwd2)
-        elif self.limiter == "mc":
-            slopes[..., -1] = _minmod_multi(2.0 * d_bwd, 2.0 * d_bwd2, 0.5 * d_bwd2)
-        else:
-            slopes[..., -1] = d_bwd  # fallback
-
-        return slopes
-
-    def _recontruct_face_states(
-        self, U: np.ndarray, slopes: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Reconstruct left/right states at internal faces from cell-centered values and slopes for 2D case.
-        Returns UL, UR arrays of shape (N+1,M) or (M,N+1).
-        UL[i] = left state at face i (from right cell)
-        UR[i] = right state at face i (from left cell)
-        """
-        UL = np.zeros(
-            (*U.shape[:-1], U.shape[-1] + 1)
-        )  # left state of face i (value from right cell)
-        UR = np.zeros(
-            (*U.shape[:-1], U.shape[-1] + 1)
-        )  # right state of face i (value from left cell)
-        UR[..., :-1] = U - slopes * self.dx_L
-        UL[..., 1:] = U + slopes * self.dx_R
-
-        UR[..., -1] = U[..., -1]
-        UL[..., 0] = U[..., 0]
-
-        return UL, UR
-
-    def _predictor_states(
-        self,
-        UL: np.ndarray,
-        UR: np.ndarray,
-        slopes_F: np.ndarray,
-        dt: float,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Perform MUSCL-Hancock predictor step to advance interface states to t^{n+1/2} for 2D case.
-        Each interface state is predicted using the donor cell's slope.
-        Returns ULh, URh arrays of shape (N+1,M) or (M,N+1).
-        """
-        ULh = UL.copy()
-        URh = UR.copy()
-
-        if self.N > 1:
-            ULh[..., 1:] -= 0.5 * dt * slopes_F  # UL* (state coming from right cell)
-            URh[..., :-1] -= 0.5 * dt * slopes_F  # UR* (state coming from left cell)
-
-        return ULh, URh
-
-    def _boundary_fluxes(
-        self,
-        U: np.ndarray,
-        ULh: np.ndarray,
-        URh: np.ndarray,
-        V_centers: np.ndarray,
-        slopes: np.ndarray,
-        dt: float,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Compute fluxes at the domain boundaries (faces 0 and N) for 2D case.
-        Left boundary (r=0): assume symmetry => flux=0.
-        Right boundary (outer face): use last cell's left state and slope for prediction.
-        """
-        size = U.shape[0] if U.ndim > 1 else 1
-        flux_L = np.zeros(size, dtype=float)
-        if self._main_faces[0] <= 0.0 and self.axis == 1:
-            # Left face (r=0): symmetry
-            flux_L[...] = 0.0
-        elif self.axis == 0:
-            # Left face (momentum inflow): use first cell right-state, or inflow
-            slp = (V_centers[..., 1] - V_centers[..., 0]) / (
-                self._main_centers[1] - self._main_centers[0]
-            )
-            V_in = V_centers[..., 0] - slp * (
-                self._main_centers[0] - self._main_faces[0]
-            )
-            # U_right_inner = U[..., 0]
-            flux_L = V_in * np.where(
-                V_in >= 0.0,
-                0.0,
-                URh[..., 0],
-            )
-        else:
-            raise ValueError("Invalid left face position for the given axis.")
-
-        # Right boundary (outer face)
-        slp = (V_centers[..., -1] - V_centers[..., -2]) / (
-            self._main_centers[-1] - self._main_centers[-2]
-        )
-        V_out = V_centers[..., -1] + slp * (
-            self._main_faces[-1] - self._main_centers[-1]
-        )
-        # left-state
-        flux_R = V_out * np.where(
-            V_out >= 0.0,
-            ULh[..., -1],
-            self.inflow_value_U,
-        )
-
-        return flux_L, flux_R
-
     @abstractmethod
     def _generalized_variable(self, f: np.ndarray, centers: np.ndarray) -> np.ndarray:
         pass
@@ -742,79 +626,3 @@ class HyperbolicSolver(SubSolver, ABC):
         self, U: np.ndarray, centers: np.ndarray
     ) -> np.ndarray:
         pass
-
-
-@njit(parallel=True, fastmath=True)
-def _numba_second_order_fluxes_core(U, V_centers, V_faces, centers, faces, dt, limiter):
-    """
-    Numba-accelerated 2D MUSCL-Hancock flux computation core.
-    This performs slope computation, reconstruction, predictor, and flux calculation in one pass.
-    """
-    M, N = U.shape  # M: other axis, N: main axis
-    F = np.zeros((M, N + 1))
-    dx_L = faces[1:-1] - centers[:-1]
-    dx_R = centers[1:] - faces[1:-1]
-
-    for j in prange(M):
-        # Extract 1D row (active axis)
-        Uj = U[j, :]
-        Vcj = V_centers[j, :]
-        Vfj = V_faces[j, :]
-
-        slopes = np.zeros(N)
-
-        if N > 2:
-            dL = (Uj[1:-1] - Uj[:-2]) / (centers[1:-1] - centers[:-2])
-            dR = (Uj[2:] - Uj[1:-1]) / (centers[2:] - centers[1:-1])
-            dC = (Uj[2:] - Uj[:-2]) / (centers[2:] - centers[:-2])
-
-            # Apply limiter
-            if limiter == 0:  # minmod
-                for i in range(1, N - 1):
-                    a, b, c = dL[i - 1], dR[i - 1], dC[i - 1]
-                    if a * b > 0.0 and a * c > 0.0:
-                        s = 1.0 if a > 0 else -1.0
-                        slopes[i] = s * min(abs(a), abs(b), abs(c))
-                    else:
-                        slopes[i] = 0.0
-            elif limiter == 1:  # vanleer
-                for i in range(1, N - 1):
-                    a, b = dL[i - 1], dR[i - 1]
-                    prod = a * b
-                    slopes[i] = (2.0 * prod / (a + b)) if prod > 0.0 else 0.0
-            elif limiter == 2:  # MC
-                for i in range(1, N - 1):
-                    a, b, c = 2 * dL[i - 1], 2 * dR[i - 1], 0.5 * dC[i - 1]
-                    if a * b > 0.0 and a * c > 0.0:
-                        s = 1.0 if a > 0 else -1.0
-                        slopes[i] = s * min(abs(a), abs(b), abs(c))
-                    else:
-                        slopes[i] = 0.0
-
-        # Reconstruction at faces
-        UL = np.zeros(N + 1)
-        UR = np.zeros(N + 1)
-        for i in range(1, N):
-            UR[i] = Uj[i - 1] + slopes[i - 1] * dx_L[i - 1]
-            UL[i] = Uj[i] - slopes[i] * dx_R[i - 1]
-
-        # Predictor step
-        ULh = UL.copy()
-        URh = UR.copy()
-        for i in range(1, N):
-            ULh[i] -= 0.5 * dt * Vcj[i] * slopes[i]
-            URh[i] -= 0.5 * dt * Vcj[i - 1] * slopes[i - 1]
-
-        # Internal fluxes
-        for i in range(1, N):
-            F[j, i] = Vfj[i - 1] * (URh[i] if Vfj[i - 1] >= 0.0 else ULh[i])
-
-        # Boundary fluxes (simplified, can adapt later)
-        # outflow inner face
-        Vin = Vcj[0]
-        U_right_inner = Uj[0]
-        F[j, 0] = Vin * (U_right_inner if Vin <= 0.0 else 0.0)
-        Vout = Vcj[-1]
-        F[j, -1] = Vout * (Uj[-1] if Vout >= 0.0 else 0.0)
-
-    return F
