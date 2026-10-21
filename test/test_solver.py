@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import pytest
 
-from saetass import Grid, Solver, State
+from saetass import Grid, Separable, Solver, State
 from saetass import units as su
 from saetass.cli import (
     create_progress_bar,
@@ -20,8 +20,11 @@ from saetass.cli import (
     set_quiet,
     set_rich_logging,
 )
-from saetass.cli.banner import BannerManager
+from saetass.cli.banner import (
+    BannerManager,
+)
 from saetass.cli.output import DEFAULT_LOG_LEVEL, LOGGER_NAME
+from saetass.solver import _describe_parameter
 
 R = np.linspace(0.0, 1.0, 11)
 P = np.logspace(0, 1, 5)
@@ -134,6 +137,13 @@ class TestQuiet:
         assert "Solving" in self._output(capsys)
 
 
+@pytest.fixture
+def debug_log(saetass_caplog):
+    """Log messages of SAETASS down to DEBUG, restoring the level afterwards."""
+    with saetass_caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        yield saetass_caplog
+
+
 class TestLogging:
     def test_messages_go_through_the_rich_console(self, capsys):
         logger = logging.getLogger(LOGGER_NAME)
@@ -188,3 +198,59 @@ class TestLogging:
             check=True,
         )
         assert out.stdout.strip() == str(logging.WARNING)
+
+    def test_parameter_descriptions(self):
+        separable = Separable([np.ones(3) * su.VELOCITY], [lambda t: 1.0])
+        canonical = separable.canonical(su.VELOCITY, "v")
+        unit = su.VELOCITY
+        assert _describe_parameter(canonical, unit) == "separable, 1 component pc / Myr"
+        assert (
+            _describe_parameter(lambda t: 0.0, unit)
+            == "time-dependent callable pc / Myr"
+        )
+        assert _describe_parameter("minmod", None) == "'minmod'"
+        assert _describe_parameter(0.5, None) == "0.5"
+        assert _describe_parameter(np.arange(4.0).reshape(2, 2), unit) == (
+            "array of shape (2, 2) in [0, 3] pc / Myr"
+        )
+
+    @pytest.mark.parametrize(
+        "velocity, expected",
+        [
+            (np.full(R.size, 0.1), "static velocities, CFL step"),
+            (np.zeros(R.size), "zero velocities"),
+            (lambda t: np.full(R.size, 0.1) * su.VELOCITY, "time-dependent velocities"),
+            (
+                Separable([np.full(R.size, 0.1) * su.VELOCITY], [lambda t: 1.0]),
+                "separable velocities with 1 component",
+            ),
+        ],
+        ids=["static", "zero", "callable", "separable"],
+    )
+    def test_operator_messages(self, debug_log, velocity, expected):
+        grid = _grid(p=None)
+        if isinstance(velocity, np.ndarray):
+            velocity = velocity * su.VELOCITY
+        params = {
+            "advection": {
+                "v_centers": velocity,
+                "limiter": "minmod",
+                "cfl": 0.5,
+                "order": 2,
+                "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+            },
+            "diffusion": {"D_values": np.ones(R.size) * su.DIFFUSION_COEFFICIENT},
+            "source": {"source": np.ones(R.size) * su.SOURCE_PSI_P},
+        }
+        state = State(grid, psi_p=np.ones(R.size) * su.PSI_P)
+        Solver(state, "advection-diffusion-source", params, quiet=True).run()
+        text = debug_log.text
+        assert "AdvectionSolver: order 2, minmod limiter, CFL number 0.5" in text
+        assert expected in text
+        assert "AdvectionSolver parameter limiter: 'minmod'" in text
+        assert "DiffusionSolver: 1 row of 11 cells, dirichlet boundary" in text
+        assert "SourceSolver: static source" in text
+        assert "Created grid: 11 r cells" in text
+        assert "Advance finished at step 2/2" in text
+        if expected.startswith("static"):
+            assert "1 CFL sub-cycle for 1 step from t = 0 Myr" in text

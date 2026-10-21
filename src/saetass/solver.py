@@ -28,7 +28,7 @@ from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
 from .grid import Grid
-from .parameters import Separable
+from .parameters import CanonicalSeparable, Separable
 from .splitting import create_splitting_scheme
 from .state import State
 
@@ -234,6 +234,24 @@ def _canonical_callable(
     return numeric
 
 
+def _describe_parameter(value: Any, unit: u.UnitBase | None) -> str:
+    """Short description of a converted parameter for the debug log: its kind, shape and range."""
+    unit_text = "" if unit is None or unit == u.dimensionless_unscaled else f" {unit}"
+    if isinstance(value, CanonicalSeparable):
+        return f"separable, {plural(len(value.profiles), 'component')}{unit_text}"
+    if callable(value):
+        return f"time-dependent callable{unit_text}"
+    array = np.asarray(value)
+    if array.dtype.kind not in "biuf":
+        return repr(value)
+    if array.size == 1:
+        return f"{array.item():.4g}{unit_text}"
+    return (
+        f"array of shape {array.shape} in [{np.min(array):.4g}, {np.max(array):.4g}]"
+        f"{unit_text}"
+    )
+
+
 from .solvers.advection_solver import AdvectionSolver  # noqa: E402
 from .solvers.diffusion_solver import DiffusionSolver  # noqa: E402
 from .solvers.loss_solver import LossSolver  # noqa: E402
@@ -396,7 +414,14 @@ class Solver:
                 )
             )
 
-            logger.debug(f"Initialized '{op.value}' solver with params: {op_params}")
+            if logger.isEnabledFor(logging.DEBUG):
+                for key, value in op_params.items():
+                    logger.debug(
+                        "%s parameter %s: %s",
+                        solver_class.__name__,
+                        key,
+                        _describe_parameter(value, solver_class.PARAM_SPECS[key].unit),
+                    )
 
     def _advance(self, n_steps):
         """Advance the solution by n_steps using operator splitting."""

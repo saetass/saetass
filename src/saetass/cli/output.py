@@ -7,6 +7,7 @@ Log messages
 
 Every module logs to a child of the ``saetass`` logger, which has its own Rich handler and does not pass messages on to the root logger.
 Its level, ``INFO`` by default, is set with :py:func:`set_log_level` or the environment variable ``SAETASS_LOG_LEVEL`` (a level name, such as ``DEBUG`` or ``WARNING``, or number), read when SAETASS is imported.
+``INFO`` reports what each simulation does (operators, grid, time steps, duration), ``DEBUG`` adds the details of every operator, the threads of the kernels and the sub-cycles of each step.
 To handle the messages with your own logging configuration instead, call ``set_rich_logging(False)``.
 
 Banner and progress bar

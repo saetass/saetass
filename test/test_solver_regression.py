@@ -227,6 +227,7 @@ def test_debug_logging_does_not_change_the_result(saetass_caplog):
     messages = caplog.text
     assert "max(|values|) after step" in messages
     assert "Advance finished" in messages
+    assert "SourceSolver: advanced by 1 step" in messages
 
     with np.load(GOLDEN_PATH) as golden:
         expected = golden["full_2d_strang"]

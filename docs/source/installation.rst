@@ -258,6 +258,23 @@ Child processes, such as the workers of :py:func:`saetass.sweep.run_sweep`, hide
 
    export SAETASS_QUIET=1  # every simulation started from this shell
 
-``SAETASS_QUIET=0`` or ``set_quiet(False)`` turn them back on, for instance in a worker process (see :py:mod:`saetass.cli.output`).
+``SAETASS_QUIET=0`` or ``set_quiet(False)`` turn them back on, for instance in a worker process.
+
+Log messages
+~~~~~~~~~~~~
+
+SAETASS prints its log messages on the same Rich console, at the ``INFO`` level by default: a summary of each simulation when it is created and its duration when it finishes.
+For more detail (every operator, the CFL sub-cycles of each step, the threads of the kernels), or for warnings only:
+
+.. code-block:: python
+
+   from saetass.cli import set_log_level
+   set_log_level("DEBUG")  # or "WARNING"
+
+.. code-block:: bash
+
+   export SAETASS_LOG_LEVEL=DEBUG  # read when SAETASS is imported
+
+To handle them with your own logging configuration instead, call ``saetass.cli.set_rich_logging(False)``: they then go to the root logger (see :py:mod:`saetass.cli.output`).
 
 For further assistance, please refer to the GitHub issues page or contact the maintainer directly.

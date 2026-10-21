@@ -23,6 +23,8 @@ from typing import Literal
 
 import numpy as np
 
+from .. import units as su
+from ..cli.output import plural
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..parallel import reset_team, threads_for
@@ -119,6 +121,8 @@ class HyperbolicSolver(SubSolver, ABC):
         self._init_kernel_arguments()
         #: CFL sub-cycles performed by the last call to advance().
         self._cfl_subcycles = 0
+        #: CFL sub-cycles performed by every call to advance() so far.
+        self.cfl_subcycles_total = 0
         #: Velocities with a separable time dependence, if any (see :py:mod:`saetass.parameters`).
         self._separable = None
 
@@ -156,6 +160,9 @@ class HyperbolicSolver(SubSolver, ABC):
             self._dt_cfl_static = float(self._compute_dt(V_faces=self.V_faces_static))
             self._V_centers_rows = self._as_rows(self.V_centers, self._rows_shape)
             self._V_faces_rows = self._as_rows(self.V_faces_static, self._faces_shape)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("%s: %s", type(self).__name__, self._describe())
 
     @property
     def _main_centers(self) -> np.ndarray:
@@ -213,7 +220,8 @@ class HyperbolicSolver(SubSolver, ABC):
             U_rows = np.empty(self._rows_shape)
 
         total_time = float(n_steps) * self._dt
-        t_local = state.t_val
+        t_local = t_start = state.t_val
+        previous_subcycles = self._cfl_subcycles
         # Remaining time below this relative tolerance is rounding residue, not a step to take
         time_tolerance = _TIME_TOLERANCE * total_time
         kernel_rows = (values_in, U_rows, values_out)
@@ -310,11 +318,48 @@ class HyperbolicSolver(SubSolver, ABC):
             if self.axis == 0:
                 values_new = values_new.T
         state._update_values(values_new)
+        self.cfl_subcycles_total += self._cfl_subcycles
 
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"max(|values|) after step: {np.max(np.abs(values_new)):.4g}")
+            if self._cfl_subcycles != previous_subcycles:
+                logger.debug(
+                    "%s: %s for %s from t = %.4g %s",
+                    type(self).__name__,
+                    plural(self._cfl_subcycles, "CFL sub-cycle"),
+                    plural(n_steps, "step"),
+                    t_start,
+                    su.TIME,
+                )
+            logger.debug(
+                "%s: max(|values|) after step: %.4g",
+                type(self).__name__,
+                np.max(np.abs(values_new)),
+            )
 
     # ---------------- internal helpers ----------------
+    def _describe(self) -> str:
+        """Scheme, rows and velocities of the operator, for the debug log."""
+        rows = 1 if self.M is None else self.M
+        text = (
+            f"order {self.order}, {self.limiter} limiter, CFL number {self.cfl:g}, "
+            f"{plural(rows, 'row')} of {plural(self.N, 'cell')}, "
+            f"time step {self._dt:.4g} {su.TIME}; "
+        )
+        if self._separable is not None:
+            components = plural(len(self._separable.profiles), "component")
+            return text + f"separable velocities with {components}"
+        if self.is_V_dynamic:
+            return text + "time-dependent velocities"
+        if not np.isfinite(self._dt_cfl_static):
+            return text + "zero velocities"
+        subcycles = max(
+            1, math.ceil(self._dt * (1.0 - _TIME_TOLERANCE) / self._dt_cfl_static)
+        )
+        return text + (
+            f"static velocities, CFL step {self._dt_cfl_static:.4g} {su.TIME}, "
+            f"{plural(subcycles, 'sub-cycle')} per step"
+        )
+
     def _init_kernel_arguments(self) -> None:
         """Arrays and options of the fused kernels that do not change between calls."""
         rows = 1 if self.M is None else self.M

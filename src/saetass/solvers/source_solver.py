@@ -4,6 +4,7 @@ from types import MappingProxyType
 import numpy as np
 
 from .. import units as su
+from ..cli.output import plural
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..solver import ParamSpec, SubSolver
@@ -75,6 +76,13 @@ class SourceSolver(SubSolver):
             self.source_static = np.asarray(source_input, dtype=float)
             self._get_source = lambda t: self.source_static
 
+        logger.debug(
+            "SourceSolver: %s source, time step %.4g %s",
+            "time-dependent" if self.is_source_dynamic else "static",
+            self._dt,
+            su.TIME,
+        )
+
     def advance(self, n_steps: int, state: State) -> None:
         """
         Advance the :py:class:`~saetass.state.State` by ``n_steps`` in :py:attr:`~saetass.solvers.source_solver.SourceSolver.t_grid`.
@@ -106,7 +114,13 @@ class SourceSolver(SubSolver):
         values_new = state._values + total_dt * S
         state._update_values(values_new)
 
-        logger.debug("Advanced source operator by %d steps (dt=%s)", n_steps, total_dt)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "SourceSolver: advanced by %s, %.4g %s",
+                plural(n_steps, "step"),
+                total_dt,
+                su.TIME,
+            )
 
     def characteristic_scales(self, t: float, dt: float) -> CharacteristicScales:
         r"""

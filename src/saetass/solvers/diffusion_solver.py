@@ -4,6 +4,7 @@ from types import MappingProxyType
 import numpy as np
 
 from .. import units as su
+from ..cli.output import plural
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..parallel import reset_team, threads_for
@@ -82,6 +83,24 @@ class DiffusionSolver(SubSolver):
         self.params = params or {}
         self._unpack_params()
         self._init_buffers()
+
+        if logger.isEnabledFor(logging.DEBUG):
+            fourier = self.characteristic_scales(self.t_grid[0], self._dt).numbers[
+                "fourier_number"
+            ]
+            logger.debug(
+                "DiffusionSolver: %s of %s, %s boundary, %s coefficients, "
+                "time step %.4g %s, Fourier number %.4g at t = %.4g %s",
+                plural(self.n_p, "row"),
+                plural(self.N, "cell"),
+                self.boundary_condition,
+                "time-dependent" if self.is_D_dynamic else "static",
+                self._dt,
+                su.TIME,
+                fourier,
+                self.t_grid[0],
+                su.TIME,
+            )
 
     def _unpack_grid(self, grid):
         self.grid = grid
