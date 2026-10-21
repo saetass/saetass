@@ -442,8 +442,7 @@ class Solver:
         State
             The final state of the solution after advancing to the final time.
         """
-        num_timesteps = self.grid.num_timesteps
-        self._advance(num_timesteps)
+        self._advance(self.total_steps - self.global_step)
         return self.state
 
     def step(self, n_steps=1) -> State:

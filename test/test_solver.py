@@ -26,6 +26,13 @@ def _solver(grid, **kwargs):
 
 
 class TestArguments:
+    def test_run_after_step_reaches_the_final_time(self):
+        solver = _solver(_grid())
+        solver.step(1)
+        solver.run()
+        assert solver.global_step == solver.total_steps
+        assert solver.state.t_val == pytest.approx(T[-1])
+
     def test_grid_is_that_of_the_state(self):
         grid = _grid()
         solver = _solver(grid)
