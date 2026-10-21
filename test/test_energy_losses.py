@@ -67,19 +67,19 @@ class TestEnergyLossCalculator:
     def test_synchrotron_losses(self, base_args):
         calc_e = EnergyLossCalculator(**base_args, particle="electron")
         B_field = np.ones(len(base_args["r_grid"])) * u.G
-        dE = calc_e.compute_sychrotron_losses(B_field=B_field)
+        dE = calc_e.compute_synchrotron_losses(B_field=B_field)
         assert dE.unit.is_equivalent(u.GeV / u.s)
 
         U_B = np.ones(len(base_args["r_grid"])) * u.eV / u.cm**3
-        dE_UB = calc_e.compute_sychrotron_losses(U_B=U_B)
+        dE_UB = calc_e.compute_synchrotron_losses(U_B=U_B)
         assert dE_UB.unit.is_equivalent(u.GeV / u.s)
 
         # Test U_B as scalar
-        dE_UB_scalar = calc_e.compute_sychrotron_losses(U_B=1.0 * u.eV / u.cm**3)
+        dE_UB_scalar = calc_e.compute_synchrotron_losses(U_B=1.0 * u.eV / u.cm**3)
         assert dE_UB_scalar.unit.is_equivalent(u.GeV / u.s)
 
         with pytest.raises(ValueError):
-            calc_e.compute_sychrotron_losses()  # Neither provided
+            calc_e.compute_synchrotron_losses()  # Neither provided
 
     def test_bremsstrahlung_losses(self, base_args):
         calc_e = EnergyLossCalculator(**base_args, particle="electron")
@@ -149,7 +149,7 @@ class TestTimeDependentLosses:
     @pytest.fixture
     def calculator(self, base_args):
         calc = EnergyLossCalculator(**base_args, particle="electron")
-        calc.compute_sychrotron_losses(B_field=10 * u.uG)
+        calc.compute_synchrotron_losses(B_field=10 * u.uG)
         calc.compute_bremsstrahlung_losses(ionised_mask=np.zeros(20, dtype=bool))
         calc.compute_ionization_losses()
         calc.compute_coulomb_losses(T_gas=1e4 * u.K)

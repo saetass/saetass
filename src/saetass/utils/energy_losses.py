@@ -247,7 +247,7 @@ class EnergyLossCalculator:
         return E_dot_pion.to(u.GeV / u.s)
 
     @u.quantity_input(B_field=su.MAGNETIC_FIELD, U_B=u.erg / u.cm**3)
-    def compute_sychrotron_losses(
+    def compute_synchrotron_losses(
         self, B_field: u.Quantity = None, U_B: u.Quantity = None
     ) -> u.Quantity:
         r"""

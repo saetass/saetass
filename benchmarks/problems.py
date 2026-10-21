@@ -484,7 +484,7 @@ def _electron_loss_columns(
         )
 
     sync = calculator(n_gas)
-    sync.compute_sychrotron_losses(B_field=B)
+    sync.compute_synchrotron_losses(B_field=B)
 
     calc = calculator(n_gas)
     dn = photon_number_density()

@@ -287,7 +287,7 @@ class TestUtilityInputs:
             particle="electron",
         )
         with pytest.raises(TypeError):
-            calc.compute_sychrotron_losses(B_field=np.full(5, 10.0))
+            calc.compute_synchrotron_losses(B_field=np.full(5, 10.0))
         with pytest.raises(u.UnitsError):
             calc.compute_inverse_compton_losses(
                 eps_grid=np.logspace(-4, 1, 20) * u.eV,
