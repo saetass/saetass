@@ -25,6 +25,12 @@ The solver module
 .. automodule:: saetass.solver
     :members:
 
+Terminal output
+---------------
+
+.. automodule:: saetass.cli.output
+    :members:
+
 Physical solvers
 ----------------
 

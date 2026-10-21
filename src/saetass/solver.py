@@ -23,6 +23,7 @@ import numpy as np
 
 from . import units as su
 from .cli.banner import print_banner
+from .cli.output import is_quiet
 from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
@@ -294,6 +295,8 @@ class Solver:
     splitting_scheme : str or :py:class:`~saetass.splitting.SplittingSchemeType`, optional
         String or :py:class:`~saetass.splitting.SplittingSchemeType` specifying the :py:class:`~saetass.splitting.SplittingScheme` to use. Valid schemes are defined in
         :py:class:`~saetass.splitting.SplittingSchemeType` (e.g., ``"strang"``, ``"lie"``). Default is ``"strang"``.
+    quiet : bool or None, optional
+        Whether to hide the banner and the progress bar. Default is ``None``, meaning :py:func:`~saetass.cli.output.is_quiet`: shown in the main process and hidden in child processes, unless :py:func:`~saetass.cli.output.set_quiet` or ``SAETASS_QUIET`` say otherwise.
     """
 
     def __init__(
@@ -303,10 +306,12 @@ class Solver:
         operator_params: dict = None,
         substeps: dict = None,
         splitting_scheme: str = None,
+        quiet: bool | None = None,
         **kwargs,
     ):
-        # Print the banner on initialization
-        print_banner()
+        self.quiet = is_quiet() if quiet is None else bool(quiet)
+        if not self.quiet:
+            print_banner()
 
         if not isinstance(state, State):
             raise TypeError(
@@ -391,7 +396,7 @@ class Solver:
     def _advance(self, n_steps):
         """Advance the solution by n_steps using operator splitting."""
         manage_progress = False
-        if getattr(self, "_progress", None) is None:
+        if not self.quiet and getattr(self, "_progress", None) is None:
             self._progress = create_progress_bar()
             self._progress.start()
             self._task_id = self._progress.add_task(
@@ -407,16 +412,17 @@ class Solver:
             for _ in range(n_steps):
                 self.global_step += 1
 
-                # The bar redraws a few times per second: computing the extrema of the
-                # state for every step would cost more than a step on small grids
-                update = {"completed": self.global_step}
-                now = time.monotonic()
-                if now >= next_metrics:
-                    next_metrics = now + _PROGRESS_METRICS_INTERVAL
-                    val_max = np.max(self.state._values)
-                    val_min = np.min(self.state._values)
-                    update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
-                self._progress.update(self._task_id, **update)
+                if not self.quiet:
+                    # The bar redraws a few times per second: computing the extrema of the
+                    # state for every step would cost more than a step on small grids
+                    update = {"completed": self.global_step}
+                    now = time.monotonic()
+                    if now >= next_metrics:
+                        next_metrics = now + _PROGRESS_METRICS_INTERVAL
+                        val_max = np.max(self.state._values)
+                        val_min = np.min(self.state._values)
+                        update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+                    self._progress.update(self._task_id, **update)
 
                 self.splitting_scheme.apply(
                     self.operator_list,
@@ -427,7 +433,7 @@ class Solver:
         finally:
             # Also on errors: a live bar left running would swallow later output
             if manage_progress or self.global_step >= self.total_steps:
-                if self._progress is not None:
+                if getattr(self, "_progress", None) is not None:
                     self._progress.stop()
                     self._progress = None
 

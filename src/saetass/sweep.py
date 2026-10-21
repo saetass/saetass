@@ -91,7 +91,7 @@ def run_sweep(
     max_workers : int, optional
         Number of worker processes, at most the number of tasks. Default is ``None``, meaning :py:func:`default_workers`.
     quiet : bool, optional
-        Whether to discard what the workers print, such as the banner and progress bar of every :py:class:`~saetass.solver.Solver`. Default is ``True``.
+        Whether to discard what the workers print and log. Their :py:class:`~saetass.solver.Solver` banners and progress bars are hidden either way, unless :py:func:`~saetass.cli.output.set_quiet` or ``SAETASS_QUIET`` turn them on (see :py:mod:`saetass.cli.output`). Default is ``True``.
     mp_context : str or None, optional
         Start method of the workers (``'spawn'``, ``'forkserver'`` or ``'fork'``), or ``None`` for the default of the platform. Default is ``'spawn'``.
 

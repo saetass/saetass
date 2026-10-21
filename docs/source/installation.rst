@@ -232,9 +232,32 @@ Scientific software evolves to incorporate more efficient algorithms and stabili
 Troubleshooting
 ---------------
 
+Module not found
+~~~~~~~~~~~~~~~~
+
 If you encounter a ``ModuleNotFoundError`` despite a successful installation, check the following:
 
 1. **Interpreter mismatch:** Ensure that the command `which python` (Linux/macOS) or `where python` (Windows) points to the interpreter inside your virtual environment.
 2. **Path conflicts:** Ensure the environment variable ``PYTHONPATH`` is not being overridden by your `.bashrc` or `.zshrc`, as this can force Python to look for libraries in the wrong locations.
+
+Garbled banner or progress bar
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every :py:class:`~saetass.solver.Solver` prints a banner and a live progress bar with `Rich <https://rich.readthedocs.io>`_.
+Some terminals, notebook front ends and log files do not render them well, and the progress bars of simulations running at the same time in several processes overwrite each other.
+Child processes, such as the workers of :py:func:`saetass.sweep.run_sweep`, hide them by default. To turn them off elsewhere, use any of:
+
+.. code-block:: python
+
+   solver = Solver(state, "diffusion", operator_params, quiet=True)  # one simulation
+
+   from saetass.cli import set_quiet
+   set_quiet(True)  # every simulation of this process
+
+.. code-block:: bash
+
+   export SAETASS_QUIET=1  # every simulation started from this shell
+
+``SAETASS_QUIET=0`` or ``set_quiet(False)`` turn them back on, for instance in a worker process (see :py:mod:`saetass.cli.output`).
 
 For further assistance, please refer to the GitHub issues page or contact the maintainer directly.
