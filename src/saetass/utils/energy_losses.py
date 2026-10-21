@@ -559,7 +559,7 @@ class EnergyLossCalculator:
 
         self._E_dot_total = E_dot_total * u.GeV / u.s
 
-        logger.info("Total energy losses computed")
+        logger.debug("Total energy losses computed")
 
         return E_dot_total * u.GeV / u.s
 

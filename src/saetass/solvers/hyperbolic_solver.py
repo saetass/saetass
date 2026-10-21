@@ -536,7 +536,6 @@ class HyperbolicSolver(SubSolver, ABC):
                 faces = np.asarray(faces, dtype=float)
                 setattr(self, f"{name}_centers", centers)
                 setattr(self, f"{name}_faces", faces)
-                logger.info(f"Using {name}-grid with {len(centers)} points")
                 return True
             else:
                 setattr(self, f"{name}_centers", None)
@@ -572,10 +571,8 @@ class HyperbolicSolver(SubSolver, ABC):
 
         other_axis = "p" if main_axis == "r" else "r"
         if _load_axis(other_axis):
-            logger.info(f"Found {other_axis}-grid")
             self.M = len(getattr(self, f"{other_axis}_centers"))
         else:
-            logger.info(f"No {other_axis}-grid found, operating in 1D mode")
             self.M = None
 
     def _face_generalized_velocity_interpolated(
@@ -623,7 +620,6 @@ class HyperbolicSolver(SubSolver, ABC):
 
         # If velocity is zero everywhere → infinite dt
         if Vmax <= 0.0:
-            logger.debug("Max velocity is zero, returning infinite dt_cfl")
             return np.inf
 
         dx_min = np.min(self.dx)

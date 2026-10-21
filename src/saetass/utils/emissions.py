@@ -813,7 +813,7 @@ class EmissionCalculator:
         self._total_gamma_flux = flux_total
         self._total_gamma_emissivity = emissivity_total
 
-        logger.info("Total gamma-ray emission computed")
+        logger.debug("Total gamma-ray emission computed")
         return flux_total
 
     def get_emissivity_component(self, component: str) -> u.Quantity:

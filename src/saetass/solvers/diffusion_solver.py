@@ -92,11 +92,9 @@ class DiffusionSolver(SubSolver):
         if grid.p_centers is not None:
             self.p_centers = np.asarray(grid.p_centers, dtype=float)
             self.p_faces = np.asarray(grid.p_faces, dtype=float)
-            logger.info(f"Found momentum grid with {len(self.p_centers)} points")
         else:
             self.p_centers = None
             self.p_faces = None
-            logger.info("No momentum grid found, operating in 1D mode")
 
         self.n_p = 1 if self.p_centers is None else len(self.p_centers)
 

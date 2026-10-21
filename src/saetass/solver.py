@@ -328,8 +328,6 @@ class Solver:
         self.substeps = substeps or {}
 
         # Determine which operators are present and print for debugging
-        logger.debug(f"Problem type: {self.problem_type}")
-        logger.debug(f"Available operators: {[op.value for op in OperatorType]}")
 
         # Parse operators from problem_type, handling exact operator names split by '-'
         self.operator_list = []
@@ -340,7 +338,6 @@ class Solver:
             operator_type = OperatorType(op)
             self.operator_list.append(operator_type)
 
-        logger.debug(f"Using operators: {[op.value for op in self.operator_list]}")
         self.n_os = len(self.operator_list)
 
         if self.n_os == 0:
@@ -357,7 +354,6 @@ class Solver:
         # Initialize splitting scheme
         if splitting_scheme is None:
             splitting_scheme = "strang"
-            logger.info("No splitting scheme specified; defaulting to 'strang'.")
         self.splitting_scheme = create_splitting_scheme(splitting_scheme)
 
         # Prepare subsolvers using the mapping
@@ -372,8 +368,9 @@ class Solver:
             self.operator_list, self.substeps_per_op, t_grid_canonical
         )
 
-        logger.info(
-            f"Lengths of refined t_grids: {[len(refined_t_grids[op]) for op in self.operator_list]}"
+        logger.debug(
+            "Time grid points per operator: %s",
+            {op.value: len(refined_t_grids[op]) for op in self.operator_list},
         )
 
         for op in self.operator_list:
