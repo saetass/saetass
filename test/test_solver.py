@@ -1,5 +1,6 @@
 """Tests of the Solver orchestrator: its arguments and terminal output."""
 
+import io
 import logging
 import multiprocessing
 import os
@@ -10,6 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numba
 import numpy as np
 import pytest
+from rich.console import Console
 
 from saetass import Grid, Separable, Solver, State, parallel
 from saetass import units as su
@@ -22,7 +24,10 @@ from saetass.cli import (
     set_rich_logging,
 )
 from saetass.cli.banner import (
+    DEFAULT_BANNER,
+    DEFAULT_TITLE,
     BannerManager,
+    print_banner,
 )
 from saetass.cli.output import DEFAULT_LOG_LEVEL, LOGGER_NAME
 from saetass.solver import _describe_parameter
@@ -288,3 +293,45 @@ class TestLogging:
             assert run_sweep(abs, [-1, -2], max_workers=1, mp_context=None) == [1, 2]
         assert "Sweep of 2 tasks on 1 worker process," in saetass_caplog.text
         assert "Sweep finished" in saetass_caplog.text
+
+
+class TestBanner:
+    @staticmethod
+    def _render(width, height=50, terminal=True, encoding="utf-8"):
+        output = io.TextIOWrapper(io.BytesIO(), encoding=encoding)
+        console = Console(
+            file=output,
+            width=width,
+            height=height,
+            force_terminal=terminal,
+            color_system=None,
+        )
+        BannerManager().reset()
+        print_banner(console=console)
+        BannerManager().print_once(console=console)  # printed once per process
+        output.seek(0)
+        return output.read().splitlines()
+
+    def test_full_banner_in_wide_terminals(self):
+        lines = self._render(120, height=10)  # whatever the height
+        assert DEFAULT_TITLE in lines[0] and "╭" in lines[0]
+        assert len(lines) == len(DEFAULT_BANNER.strip("\n").splitlines()) + 2
+
+    def test_name_alone_on_the_border_of_narrower_terminals(self):
+        lines = self._render(60)
+        assert "─ SAETASS ─" in lines[0] and DEFAULT_TITLE not in lines[0]
+        assert "Spherical Symmetry" in "\n".join(lines)
+        assert all(len(line) <= 60 for line in lines)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{"width": 38}, {"width": 120, "terminal": False}],
+        ids=["narrow", "not_a_terminal"],
+    )
+    def test_title_alone_otherwise(self, kwargs):
+        lines = self._render(**kwargs)
+        assert " ".join(line.strip() for line in lines) == DEFAULT_TITLE
+
+    def test_ascii_borders_without_unicode(self):
+        lines = self._render(120, encoding="ascii")
+        assert lines[0].strip().startswith("+-") and "╭" not in "\n".join(lines)

@@ -1,7 +1,7 @@
 import logging
 
 from rich.align import Align
-from rich.console import Console
+from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.text import Text
 
@@ -39,6 +39,52 @@ DEFAULT_BANNER = r"""
 """
 
 
+#: Title of the banner: the name of SAETASS and, after the colon, what it stands for.
+DEFAULT_TITLE = "SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Symmetry"
+
+
+def _banner(console: Console, text: str, title: str) -> RenderableType:
+    """
+    The banner that fits ``console``.
+
+    - With room for the art and the whole title on one line: the art in a panel titled ``title``.
+    - With room for the art only: the art in a panel titled with the name before the colon of ``title``, and the rest of the title wrapped below the art.
+    - Otherwise, and whenever the output is not an interactive terminal or notebook (a file, a pipe, a CI log), where a large banner only clutters the output: ``title`` alone, as a single line that wraps if needed.
+
+    The height of the terminal does not matter: the banner is printed once per process and scrolls up as any other output.
+
+    Rich already adapts each layout to the terminal: ASCII borders where the encoding is not UTF-8, the border style of the legacy Windows console, and fewer colours (or none, with ``NO_COLOR`` or ``TERM=dumb``) where the terminal supports fewer.
+    """
+    art = text.strip("\n").splitlines()
+    art_width = max((len(line) for line in art), default=0)
+    name, _, description = title.partition(": ")
+    interactive = console.is_terminal or console.is_jupyter
+    # Two border columns and two padding columns
+    if not (interactive and console.width >= art_width + 4):
+        return Text.assemble((name, f"bold {SAETASS_YELLOW}"), (title[len(name) :], ""))
+
+    rich_text = Text("\n".join(art), no_wrap=True)
+    rich_text.highlight_regex(r":", SAETASS_ORANGE)
+    rich_text.highlight_regex(r"\+", SAETASS_YELLOW)
+    if console.width >= len(title) + 6 or not description:
+        content, panel_title = Align.center(rich_text), title
+    else:
+        content = Group(
+            Align.center(rich_text),
+            Text(""),
+            Text(description, justify="center"),
+        )
+        panel_title = name
+    return Align.center(
+        Panel(
+            content,
+            title=f"[bold {SAETASS_YELLOW}]{panel_title}[/]",
+            expand=False,
+            border_style=SAETASS_ORANGE,
+        )
+    )
+
+
 class BannerManager:
     """
     Singleton manager for printing the SAETASS ASCII banner.
@@ -58,10 +104,10 @@ class BannerManager:
         self,
         console: Console = None,
         text: str = DEFAULT_BANNER,
-        title: str = "SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Symmetry",
+        title: str = DEFAULT_TITLE,
     ):
         """
-        Prints the banner if it hasn't been printed yet by this singleton.
+        Prints the banner that fits the console if it hasn't been printed yet by this singleton.
         """
         if self._printed:
             return
@@ -69,17 +115,7 @@ class BannerManager:
         if console is None:
             console = default_console
 
-        rich_text = Text(text)
-        rich_text.highlight_regex(r":", SAETASS_ORANGE)
-        rich_text.highlight_regex(r"\+", SAETASS_YELLOW)
-
-        panel = Panel(
-            Align.center(rich_text),
-            title=f"[bold {SAETASS_YELLOW}]{title}[/]",
-            expand=False,
-            border_style=SAETASS_ORANGE,
-        )
-        console.print(Align.center(panel))
+        console.print(_banner(console, text, title))
         self._printed = True
 
     def reset(self):
@@ -90,11 +126,13 @@ class BannerManager:
 def print_banner(
     console: Console = None,
     text: str = DEFAULT_BANNER,
-    title: str = "SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Symmetry",
+    title: str = DEFAULT_TITLE,
 ):
     """
-    Print the SAETASS ASCII banner.
+    Print the SAETASS ASCII banner, in the layout that fits the console.
     It delegates to a Singleton to ensure it's only printed once per runtime.
+
+    The art is shown only in interactive terminals and notebooks wide enough for it; otherwise the banner is the title alone, on a single line.
 
     Parameters
     ----------
@@ -103,6 +141,6 @@ def print_banner(
     text : str, optional
         The ASCII art/text to print.
     title : str, optional
-        The string to place at the top of the panel border.
+        The string to place at the top of the panel border. When the console is too narrow for it, the part before the colon stays there and the rest goes below the art.
     """
     BannerManager().print_once(console=console, text=text, title=title)
