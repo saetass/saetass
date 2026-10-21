@@ -23,7 +23,7 @@ import numpy as np
 
 from . import units as su
 from .cli.banner import print_banner
-from .cli.output import is_quiet
+from .cli.output import is_quiet, plural
 from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
@@ -360,6 +360,14 @@ class Solver:
         self.operator_subsolvers = []
         self._initialize_subsolvers(**kwargs)
 
+        logger.info(
+            "Solver: %s with %s splitting, %s on %s",
+            "-".join(op.value for op in self.operator_list),
+            type(self.splitting_scheme).__name__.removesuffix("Splitting"),
+            self.state.particle.value,
+            self.grid.summary(),
+        )
+
     def _initialize_subsolvers(self, **kwargs):
         """Initialize subsolvers with appropriate t_grids and canonical numeric parameters."""
         # Grid enforces Quantity time grids: this is the single unit-stripping point for time.
@@ -436,7 +444,9 @@ class Solver:
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
+                f"Advance finished at step {self.global_step}/{self.total_steps}, "
+                f"t = {self.state.t_val:.4g} {su.TIME} | "
+                f"max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
             )
 
     def run(self) -> State:
@@ -447,7 +457,24 @@ class Solver:
         State
             The final state of the solution after advancing to the final time.
         """
-        self._advance(self.total_steps - self.global_step)
+        start = time.perf_counter()
+        steps = self.total_steps - self.global_step
+        self._advance(steps)
+        elapsed = time.perf_counter() - start
+        subcycles = {
+            op.value: sub.cfl_subcycles_total
+            for op, sub in zip(self.operator_list, self.operator_subsolvers)
+            if hasattr(sub, "cfl_subcycles_total")
+        }
+        logger.info(
+            "Solver finished %s in %.3g s (%.3g steps/s), at t = %.4g %s%s",
+            plural(steps, "step"),
+            elapsed,
+            steps / elapsed if elapsed > 0.0 else float("inf"),
+            self.state.t_val,
+            su.TIME,
+            f"; CFL sub-cycles: {subcycles}" if subcycles else "",
+        )
         return self.state
 
     def step(self, n_steps=1) -> State:

@@ -53,7 +53,7 @@ def default_output(monkeypatch):
 
 class TestArguments:
     def test_run_after_step_reaches_the_final_time(self):
-        solver = _solver(_grid())
+        solver = _solver(_grid(), quiet=True)
         solver.step(1)
         solver.run()
         assert solver.global_step == solver.total_steps
@@ -61,7 +61,7 @@ class TestArguments:
 
     def test_grid_is_that_of_the_state(self):
         grid = _grid()
-        solver = _solver(grid)
+        solver = _solver(grid, quiet=True)
         assert solver.grid is grid
         assert solver.total_steps == T.size - 1
 
@@ -70,23 +70,6 @@ class TestArguments:
         state = State(grid, psi_p=np.ones(grid.shape) * su.PSI_P)
         with pytest.raises(TypeError, match="takes the initial State as first"):
             Solver(grid, state, "diffusion")
-
-
-class TestProgressBar:
-    def test_progress_bar_stops_on_errors(self, monkeypatch, capsys):
-        solver = _solver(_grid())
-
-        def fail(*args):
-            raise RuntimeError("step failed")
-
-        monkeypatch.setattr(solver.splitting_scheme, "apply", fail)
-        with pytest.raises(RuntimeError, match="step failed"):
-            solver.run()
-        assert create_progress_bar()._progress is None
-        # Later simulations print their own bar
-        capsys.readouterr()
-        _solver(_grid()).run()
-        assert "Solving" in capsys.readouterr().out
 
 
 class TestQuiet:
@@ -101,13 +84,15 @@ class TestQuiet:
         assert "Equation of Transport" in output  # banner
         assert "Solving" in output  # progress bar
 
-    def test_quiet_solver_prints_nothing(self, capsys, default_output):
-        assert self._output(capsys, quiet=True) == ""
+    def test_quiet_solver_prints_only_log_messages(self, capsys, default_output):
+        output = self._output(capsys, quiet=True)
+        assert "Equation of Transport" not in output and "Solving" not in output
+        assert "Solver finished" in output  # log messages are not affected
 
     def test_set_quiet(self, capsys, default_output):
         set_quiet(True)
         assert is_quiet()
-        assert self._output(capsys) == ""
+        assert "Solving" not in self._output(capsys)
         assert "Solving" in self._output(capsys, quiet=False)
         set_quiet(False)
         assert not is_quiet()
@@ -135,25 +120,37 @@ class TestQuiet:
         with ProcessPoolExecutor(max_workers=1, mp_context=context) as pool:
             assert pool.submit(is_quiet).result()
 
+    def test_progress_bar_stops_on_errors(self, monkeypatch, capsys, default_output):
+        solver = _solver(_grid(), quiet=False)
+
+        def fail(*args):
+            raise RuntimeError("step failed")
+
+        monkeypatch.setattr(solver.splitting_scheme, "apply", fail)
+        with pytest.raises(RuntimeError, match="step failed"):
+            solver.run()
+        assert create_progress_bar()._progress is None
+        # Later simulations print their own bar
+        assert "Solving" in self._output(capsys)
+
 
 class TestLogging:
     def test_messages_go_through_the_rich_console(self, capsys):
         logger = logging.getLogger(LOGGER_NAME)
         assert logger.level == logging.INFO and not logger.propagate
         capsys.readouterr()
-        logging.getLogger(f"{LOGGER_NAME}.test").info("A message of SAETASS")
-        logging.getLogger(f"{LOGGER_NAME}.test").debug("A hidden message")
+        _solver(_grid(), quiet=True).run()
         output = capsys.readouterr().out
-        assert "INFO" in output and "A message of SAETASS" in output
-        assert "hidden" not in output
+        assert "Solver: diffusion with Strang splitting, proton on 11 r cells" in output
+        assert "Solver finished 2 steps" in output
 
     def test_set_rich_logging(self, caplog):
         logger = logging.getLogger(LOGGER_NAME)
         set_rich_logging(False)
         try:
             assert logger.propagate and output._handler not in logger.handlers
-            logging.getLogger(f"{LOGGER_NAME}.test").info("To the root logger")
-            assert "To the root logger" in caplog.text
+            _solver(_grid(), quiet=True)
+            assert "Solver: diffusion" in caplog.text  # handled by the root logger
         finally:
             set_rich_logging(True)
         set_rich_logging(True)  # idempotent

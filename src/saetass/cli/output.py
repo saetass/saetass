@@ -42,6 +42,27 @@ _FALSE = frozenset({"0", "false", "no", "off"})
 _quiet: bool | None = None
 
 
+def plural(count: int, noun: str, plural_noun: str | None = None) -> str:
+    """
+    ``count`` followed by ``noun`` in singular or plural, for messages.
+
+    Parameters
+    ----------
+    count : int
+        Number of things.
+    noun : str
+        Singular noun.
+    plural_noun : str, optional
+        Plural noun. Default is ``None``, meaning ``noun`` followed by ``s``.
+
+    Returns
+    -------
+    str
+        For instance ``"1 step"`` or ``"3 steps"``.
+    """
+    return f"{count} {noun if count == 1 else plural_noun or noun + 's'}"
+
+
 def set_quiet(quiet: bool | None) -> None:
     """
     Turn the banner and progress bar of every :py:class:`~saetass.solver.Solver` of this process off or on.
