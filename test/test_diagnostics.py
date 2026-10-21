@@ -334,6 +334,22 @@ def test_operators_without_scales():
     assert "splitting_ratio" not in still.numbers  # a single operator is not split
 
 
+def test_vanishing_diffusion_coefficients_do_not_warn():
+    # The harmonic mean of a face next to a zero coefficient divides by zero
+    D = np.where(R < 5.0, 0.0, 1.0) * su.DIFFUSION_COEFFICIENT
+    solver = _solver("diffusion", {"diffusion": {"D_values": D}})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        diag = solver.diagnostics(warn=False)
+
+    D_face = np.empty_like(solver.operator_subsolvers[0]._D_face)
+    G = np.empty_like(solver.operator_subsolvers[0]._G)
+    solver.operator_subsolvers[0]._compute_conductances(D.value[None, :], D_face, G)
+    assert np.all(D_face[0, 1:-1][R[1:] <= 5.0] == 0.0)
+    assert np.all(D_face[0, 1:-1][R[:-1] >= 5.0] > 0.0)
+    assert np.isfinite(diag["diffusion"].numbers["fourier_number"])
+
+
 def test_report_and_lookup():
     params = {
         "advection": _advection(2.0),

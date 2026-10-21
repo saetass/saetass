@@ -273,7 +273,10 @@ class DiffusionSolver(SubSolver):
         D_left = D_values[:, :-1]
         D_right = D_values[:, 1:]
         num = self.hL_b + self.hR_b
-        den = self.hL_b / D_left + self.hR_b / D_right
+        # A vanishing coefficient gives an infinite denominator and a zero face
+        # coefficient, as in the compiled assembly: it is not an error
+        with np.errstate(divide="ignore"):
+            den = self.hL_b / D_left + self.hR_b / D_right
         den = np.where(den == 0.0, np.finfo(float).tiny, den)
         D_face[:, 1:-1] = num / den
         D_face[:, 0] = D_values[:, 0]
