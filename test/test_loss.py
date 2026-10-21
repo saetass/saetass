@@ -13,7 +13,7 @@ import astropy.units as u
 import numpy as np
 import pytest
 
-from saetass import Grid, Particle, Solver, State
+from saetass import Grid, Particle, Solver, State, TimeFactor
 from saetass import units as su
 
 # ---------------------------------------------------------------------------
@@ -515,3 +515,34 @@ class TestLossSolver2D:
             np.testing.assert_allclose(
                 psi_2d[:, j], solver_1d.run().psi_p.to_value(su.PSI_P), rtol=1e-12
             )
+
+    @pytest.mark.parametrize("kind", ["static", "callable", "separable"])
+    def test_cfl_step_includes_the_last_momentum_of_every_radius(self, kind):
+        """The last momentum of each radius bounds the CFL step, as the outer face."""
+        p = np.logspace(0, 2, 20) * su.MOMENTUM
+        t_grid = np.array([0.0, 0.2]) * su.TIME
+        P_dot = np.tile(-0.3 * p.to_value(su.MOMENTUM)[:, None], (1, 3))
+        P_dot[-1, 0] *= 20.0  # the last momentum loses fastest at the first radius
+        rate = P_dot * su.MOMENTUM_LOSS_RATE
+        if kind == "callable":
+            rate_2d = lambda t: P_dot * su.MOMENTUM_LOSS_RATE  # noqa: E731
+        elif kind == "separable":
+            rate_2d = rate * TimeFactor(lambda t: 1.0)
+        else:
+            rate_2d = rate
+
+        def subcycles(grid, P):
+            solver = Solver(
+                grid=grid,
+                state=State(psi_p=np.ones(grid.shape) * su.PSI_P, grid=grid),
+                problem_type="loss",
+                operator_params={"loss": {**self.params, "P_dot": P}},
+            )
+            solver.run()
+            return solver.operator_subsolvers[0]._cfl_subcycles
+
+        grid_2d = Grid(
+            r_centers=np.array([1.0, 2.0, 3.0]) * su.LENGTH, p_centers=p, t_grid=t_grid
+        )
+        grid_1d = Grid(p_centers=p, t_grid=t_grid)
+        assert subcycles(grid_2d, rate_2d) == subcycles(grid_1d, rate[:, 0])

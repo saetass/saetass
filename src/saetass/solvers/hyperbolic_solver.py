@@ -374,11 +374,14 @@ class HyperbolicSolver(SubSolver, ABC):
             return values.reshape(self._rows_shape)
         return values.T if self.axis == 0 else values
 
-    def _last_center_speed(self, V_centers: np.ndarray) -> float:
-        """Largest speed of the last cells along the active axis, as in :py:meth:`_compute_dt`."""
-        if V_centers.ndim == 1:
-            return float(abs(V_centers[-1]))
-        return float(np.max(np.abs(np.take(V_centers, indices=-1, axis=self.axis))))
+    @staticmethod
+    def _last_center_speed(V_centers: np.ndarray) -> float:
+        """
+        Largest speed of the last cells along the active axis, the proxy of the outer face in the CFL condition.
+
+        Velocities are kept with the active axis last, whatever :py:attr:`axis` is.
+        """
+        return float(np.max(np.abs(V_centers[..., -1])))
 
     def _init_separable(self, V_input: CanonicalSeparable) -> None:
         """Components of separable velocities as kernel rows, at the centers, faces and last cells."""
@@ -399,7 +402,7 @@ class HyperbolicSolver(SubSolver, ABC):
         if components[0].ndim == 1:
             last = [V[-1:] for V in components]
         else:
-            last = [np.take(V, indices=-1, axis=self.axis) for V in components]
+            last = [V[..., -1] for V in components]
         self._separable_last = np.ascontiguousarray(np.stack(last), dtype=float)
         self._separable = V_input
 
@@ -594,19 +597,14 @@ class HyperbolicSolver(SubSolver, ABC):
         # Linear interpolation: closer center gets higher weight
         return (V_left * dist_right + V_right * dist_left) / denom
 
-    def _compute_dt(
-        self, V_faces: np.ndarray = None, V_centers: np.ndarray = None
-    ) -> float:
+    def _compute_dt(self, V_faces: np.ndarray, V_centers: np.ndarray = None) -> float:
         """
         Compute a stable time step based on the CFL condition:
 
             dt = cfl * min(dx) / max(|V|)
 
-        Works for both 1D and 2D problems depending on `self.axis`.
+        Works for both 1D and 2D problems, with the active axis last in ``V_faces`` and ``V_centers``.
         """
-        # Interpolated velocities at faces along the active axis
-        if V_faces is None:
-            V_faces = self._face_generalized_velocity_interpolated()
         if V_centers is None:
             V_centers = self.V_centers
 
@@ -616,17 +614,8 @@ class HyperbolicSolver(SubSolver, ABC):
         else:
             Vmax = 0.0
 
-        # Include outermost face proxy using last cell center along the active axis
-        # Take max across slices if multidimensional
-        if V_centers.ndim == 1:
-            last_center_vel = abs(V_centers[-1])
-        else:
-            # Take the last index along the active axis, all slices on the other axis
-            last_center_vel = np.max(
-                np.abs(np.take(V_centers, indices=-1, axis=self.axis))
-            )
-
-        Vmax = max(Vmax, float(last_center_vel))
+        # Include the outermost face, using the last cells along the active axis as proxy
+        Vmax = max(Vmax, self._last_center_speed(V_centers))
 
         # If velocity is zero everywhere → infinite dt
         if Vmax <= 0.0:
