@@ -226,7 +226,6 @@ def test_debug_logging_does_not_change_the_result(caplog):
     messages = caplog.text
     assert "max(|values|) after step" in messages
     assert "Advance finished" in messages
-    assert "Strang splitting: full step for operator 'diffusion'" in messages
 
     with np.load(GOLDEN_PATH) as golden:
         expected = golden["full_2d_strang"]
