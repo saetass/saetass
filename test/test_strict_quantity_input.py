@@ -93,7 +93,7 @@ def test_subsolvers_reject_quantities():
         )
 
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         AdvectionSolver(
             grid,
@@ -109,7 +109,7 @@ def test_subsolvers_reject_quantities():
 
     # 3. DiffusionSolver rejects Quantity in params
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         DiffusionSolver(
             grid,
@@ -119,7 +119,7 @@ def test_subsolvers_reject_quantities():
 
     # 4. SourceSolver rejects Quantity in params
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         SourceSolver(
             grid,
@@ -133,7 +133,7 @@ def test_subsolvers_reject_quantities():
         t_grid=grid.t_grid,
     )
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         LossSolver(
             grid_p,
