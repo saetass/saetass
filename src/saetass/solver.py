@@ -43,7 +43,7 @@ class ParamSpec:
     Each :py:class:`~saetass.solver.SubSolver` declares its accepted parameters in
     :py:attr:`~saetass.solver.SubSolver.PARAM_SPECS`. :py:class:`~saetass.solver.Solver`
     uses these declarations to convert physical inputs into the bare canonical floats
-    consumed by the numerical kernels, rejecting anything undeclared.
+    consumed by the numerical kernels, rejecting anything undeclared or missing.
 
     Parameters
     ----------
@@ -57,11 +57,14 @@ class ParamSpec:
     coords : bool, optional
         Whether a dynamic callable also receives the physical cell-center coordinates,
         ``fn(r, p, t)``, where ``r`` or ``p`` is ``None`` for 1D grids.
+    required : bool, optional
+        Whether the parameter must always be given. Default is ``False``.
     """
 
     unit: u.UnitBase | None = None
     dynamic: bool = False
     coords: bool = False
+    required: bool = False
 
 
 class SubSolver(ABC):
@@ -119,7 +122,7 @@ class SubSolver(ABC):
         Raises
         ------
         ValueError
-            If a parameter is not declared in :py:attr:`PARAM_SPECS`.
+            If a parameter is not declared in :py:attr:`PARAM_SPECS`, or a required one is missing.
         TypeError
             If a physical parameter lacks units, a non-physical one has them, or a callable is given for a non-dynamic parameter.
         astropy.units.UnitsError
@@ -150,6 +153,16 @@ class SubSolver(ABC):
                 converted[key] = _canonical_callable(value, spec.unit, coords, name)
             else:
                 converted[key] = su.validate_quantity(value, spec.unit, name).value
+
+        missing = [
+            key
+            for key, spec in cls.PARAM_SPECS.items()
+            if spec.required and key not in params
+        ]
+        if missing:
+            raise ValueError(
+                f"Missing required {cls.__name__} parameter(s) {sorted(missing)}."
+            )
         return converted
 
     @classmethod

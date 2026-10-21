@@ -252,7 +252,10 @@ class TestAdvectionSolverExceptionsAndEdges:
             "order": 1,
             "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
         }
-        with pytest.raises(ValueError, match="cfl must be"):
+        with pytest.raises(
+            ValueError,
+            match=r"Missing required AdvectionSolver parameter\(s\) \['cfl'\]",
+        ):
             Solver(
                 grid=grid,
                 state=state,

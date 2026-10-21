@@ -49,8 +49,8 @@ class AdvectionSolver(HyperbolicSolver):
     PARAM_SPECS = MappingProxyType(
         {
             **HyperbolicSolver.PARAM_SPECS,
-            "v_centers": ParamSpec(su.VELOCITY, dynamic=True),
-            "inflow_value_U": ParamSpec(su.AREA * su.PSI_P),
+            "v_centers": ParamSpec(su.VELOCITY, dynamic=True, required=True),
+            "inflow_value_U": ParamSpec(su.AREA * su.PSI_P, required=True),
         }
     )
 

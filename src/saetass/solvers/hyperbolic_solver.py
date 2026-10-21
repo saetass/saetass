@@ -82,7 +82,11 @@ class HyperbolicSolver(SubSolver, ABC):
 
     #: Numerical options shared by all hyperbolic subsolvers (extended by subclasses).
     PARAM_SPECS = MappingProxyType(
-        {"limiter": ParamSpec(), "cfl": ParamSpec(), "order": ParamSpec()}
+        {
+            "limiter": ParamSpec(required=True),
+            "cfl": ParamSpec(required=True),
+            "order": ParamSpec(required=True),
+        }
     )
 
     #: Whether slopes are limited on :math:`U / r^2` instead of :math:`U` (spherical advection).

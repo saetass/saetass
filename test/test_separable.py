@@ -206,8 +206,14 @@ def test_separable_units_are_checked():
     dimensionful_factor = Separable(
         [np.ones(R.size) * su.VELOCITY], [lambda t: 2.0 * su.LENGTH]
     )
+    required = {
+        "limiter": "minmod",
+        "cfl": 0.5,
+        "order": 1,
+        "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+    }
     canonical = AdvectionSolver.convert_params(
-        {"v_centers": dimensionful_factor}, grid
+        {**required, "v_centers": dimensionful_factor}, grid
     )["v_centers"]
     with pytest.raises(u.UnitsError):
         canonical(0.0)

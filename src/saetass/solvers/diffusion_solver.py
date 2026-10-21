@@ -57,7 +57,9 @@ class DiffusionSolver(SubSolver):
 
     PARAM_SPECS = MappingProxyType(
         {
-            "D_values": ParamSpec(su.DIFFUSION_COEFFICIENT, dynamic=True),
+            "D_values": ParamSpec(
+                su.DIFFUSION_COEFFICIENT, dynamic=True, required=True
+            ),
             "psi_end": ParamSpec(su.PSI_P, dynamic=True),
             "boundary_condition": ParamSpec(),
         }

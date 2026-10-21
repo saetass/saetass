@@ -57,7 +57,7 @@ class LossSolver(HyperbolicSolver):
     PARAM_SPECS = MappingProxyType(
         {
             **HyperbolicSolver.PARAM_SPECS,
-            "P_dot": ParamSpec(su.MOMENTUM_LOSS_RATE, dynamic=True),
+            "P_dot": ParamSpec(su.MOMENTUM_LOSS_RATE, dynamic=True, required=True),
             "inflow_value_psi": ParamSpec(su.PSI_P),
             "inflow_value_U": ParamSpec(su.MOMENTUM * su.PSI_P),
             "adiabatic_losses": ParamSpec(),

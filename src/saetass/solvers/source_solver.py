@@ -48,7 +48,7 @@ class SourceSolver(SubSolver):
     """
 
     PARAM_SPECS = MappingProxyType(
-        {"source": ParamSpec(su.SOURCE_PSI_P, dynamic=True, coords=True)}
+        {"source": ParamSpec(su.SOURCE_PSI_P, dynamic=True, coords=True, required=True)}
     )
 
     def __init__(self, grid: Grid, t_grid: np.ndarray, params: dict, **kwargs):

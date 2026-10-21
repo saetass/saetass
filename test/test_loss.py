@@ -324,6 +324,9 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
+            "limiter": "minmod",
+            "cfl": 0.5,
+            "order": 1,
             "adiabatic_losses": True,
             **extra,
         }
