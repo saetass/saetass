@@ -26,6 +26,7 @@ from saetass.cli.banner import (
 )
 from saetass.cli.output import DEFAULT_LOG_LEVEL, LOGGER_NAME
 from saetass.solver import _describe_parameter
+from saetass.sweep import run_sweep
 
 R = np.linspace(0.0, 1.0, 11)
 P = np.logspace(0, 1, 5)
@@ -281,3 +282,9 @@ class TestLogging:
         assert parallel.threads_for(4, 1e6) == 3
         assert debug_log.text.count("Kernel thread team: 3 threads") == 1
         parallel.reset_team()
+
+    def test_sweep_messages(self, saetass_caplog):
+        with saetass_caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            assert run_sweep(abs, [-1, -2], max_workers=1, mp_context=None) == [1, 2]
+        assert "Sweep of 2 tasks on 1 worker process," in saetass_caplog.text
+        assert "Sweep finished" in saetass_caplog.text

@@ -13,12 +13,18 @@ The compiled kernels are cached on disk, so workers do not compile them again af
 """
 
 import contextlib
+import logging
 import multiprocessing
 import os
 import sys
+import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
+
+from .cli.output import plural
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["WORKER_ENVIRONMENT", "default_workers", "run_sweep"]
 
@@ -122,14 +128,24 @@ def run_sweep(
         return []
 
     context = None if mp_context is None else multiprocessing.get_context(mp_context)
+    workers = min(max_workers, len(tasks))
+    logger.info(
+        "Sweep of %s on %s, started with %s",
+        plural(len(tasks), "task"),
+        plural(workers, "worker process", "worker processes"),
+        mp_context or "the default method",
+    )
+    start = time.perf_counter()
     # Workers start on demand while the tasks are submitted, inheriting the environment
     with (
         _worker_environment(),
         ProcessPoolExecutor(
-            max_workers=min(max_workers, len(tasks)),
+            max_workers=workers,
             mp_context=context,
             initializer=_init_worker,
             initargs=(quiet,),
         ) as pool,
     ):
-        return list(pool.map(function, tasks))
+        results = list(pool.map(function, tasks))
+    logger.info("Sweep finished in %.3g s", time.perf_counter() - start)
+    return results
