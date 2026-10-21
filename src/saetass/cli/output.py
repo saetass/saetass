@@ -1,5 +1,16 @@
 """
-Switch for the terminal output of SAETASS: the banner and the live progress bar that every :py:class:`~saetass.solver.Solver` prints with `Rich <https://rich.readthedocs.io>`_.
+Terminal output of SAETASS: its log messages, and the banner and live progress bar that every :py:class:`~saetass.solver.Solver` prints, all rendered with `Rich <https://rich.readthedocs.io>`_ on the same console, so that messages appear above a running progress bar instead of breaking it.
+Rich adapts the output to the terminal: without one (a file, a pipe, a CI log) it neither animates nor colours, and it also honours ``NO_COLOR`` and ``TERM=dumb``, non-UTF-8 encodings and the legacy Windows console.
+
+Log messages
+------------
+
+Every module logs to a child of the ``saetass`` logger, which has its own Rich handler and does not pass messages on to the root logger.
+Its level, ``INFO`` by default, is set with :py:func:`set_log_level` or the environment variable ``SAETASS_LOG_LEVEL`` (a level name, such as ``DEBUG`` or ``WARNING``, or number), read when SAETASS is imported.
+To handle the messages with your own logging configuration instead, call ``set_rich_logging(False)``.
+
+Banner and progress bar
+-----------------------
 
 They can be turned off, in order of precedence:
 
@@ -8,11 +19,22 @@ They can be turned off, in order of precedence:
 3. through the environment variable ``SAETASS_QUIET`` (``1``, ``true``, ``yes`` or ``on`` turn it off, and ``0``, ``false``, ``no`` or ``off`` turn it on).
 
 Without any of them, they are shown in the main process and hidden in child processes, such as the workers of :py:mod:`multiprocessing` or :py:func:`saetass.sweep.run_sweep`: the live progress bars of simulations running side by side would overwrite each other on the same terminal.
-Silencing them is also useful in terminals and log files that do not render Rich well.
+Log messages are not affected.
 """
 
+import logging
 import multiprocessing
 import os
+
+from rich.logging import RichHandler
+
+from .progress import console
+
+#: Name of the logger of SAETASS, the parent of the logger of every module.
+LOGGER_NAME = "saetass"
+
+#: Level of the log messages when ``SAETASS_LOG_LEVEL`` is not set.
+DEFAULT_LOG_LEVEL = logging.INFO
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
@@ -59,3 +81,61 @@ def is_quiet() -> bool:
             f"SAETASS_QUIET must be one of {sorted(_TRUE | _FALSE)}, got {value!r}."
         )
     return multiprocessing.parent_process() is not None
+
+
+def _parse_log_level(level: int | str, name: str) -> int:
+    """Level number of a level name or number."""
+    if isinstance(level, str):
+        text = level.strip()
+        level = int(text) if text.isdigit() else logging.getLevelName(text.upper())
+    if isinstance(level, bool) or not isinstance(level, int):
+        raise ValueError(
+            f"{name} must be a logging level such as 'DEBUG', 'INFO' or 'WARNING', "
+            f"or its number."
+        )
+    return level
+
+
+def set_log_level(level: int | str) -> None:
+    """
+    Set the level of the log messages of SAETASS.
+
+    Parameters
+    ----------
+    level : int or str
+        A level of :py:mod:`logging`, as a number (``logging.DEBUG``) or a name (``"DEBUG"``).
+
+    Raises
+    ------
+    ValueError
+        If ``level`` is not a logging level.
+    """
+    logging.getLogger(LOGGER_NAME).setLevel(_parse_log_level(level, "level"))
+
+
+_handler = RichHandler(
+    console=console, show_path=False, markup=False, rich_tracebacks=False
+)
+
+
+def set_rich_logging(enabled: bool) -> None:
+    """
+    Render the log messages of SAETASS with its Rich console, or hand them to the root logger.
+
+    Parameters
+    ----------
+    enabled : bool
+        ``True`` (the default when SAETASS is imported) to print them with the Rich handler of SAETASS, ``False`` to pass them on to the root logger, for your own logging configuration (for instance :py:func:`logging.basicConfig`) to handle them.
+    """
+    logger = logging.getLogger(LOGGER_NAME)
+    if enabled:
+        if _handler not in logger.handlers:
+            logger.addHandler(_handler)
+        logger.propagate = False
+    else:
+        logger.removeHandler(_handler)
+        logger.propagate = True
+
+
+set_rich_logging(True)
+set_log_level(os.environ.get("SAETASS_LOG_LEVEL", "").strip() or DEFAULT_LOG_LEVEL)

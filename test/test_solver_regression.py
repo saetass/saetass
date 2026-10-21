@@ -219,8 +219,9 @@ def test_matches_golden_output(case, update_golden):
     )
 
 
-def test_debug_logging_does_not_change_the_result(caplog):
+def test_debug_logging_does_not_change_the_result(saetass_caplog):
     """The debug messages computed only when enabled report without side effects."""
+    caplog = saetass_caplog
     with caplog.at_level(logging.DEBUG, logger="saetass"):
         result = CASES["full_2d_strang"]()
     messages = caplog.text

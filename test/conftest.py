@@ -27,3 +27,13 @@ def plot_results(request):
 def update_golden(request):
     """Fixture that returns True if --update-golden was passed, False otherwise."""
     return request.config.getoption("--update-golden")
+
+
+@pytest.fixture
+def saetass_caplog(caplog):
+    """``caplog`` receiving the log messages of SAETASS, which its Rich handler keeps by default."""
+    from saetass.cli import set_rich_logging
+
+    set_rich_logging(False)
+    yield caplog
+    set_rich_logging(True)

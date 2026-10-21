@@ -1,6 +1,10 @@
 """Tests of the Solver orchestrator: its arguments and terminal output."""
 
+import logging
 import multiprocessing
+import os
+import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -8,8 +12,16 @@ import pytest
 
 from saetass import Grid, Solver, State
 from saetass import units as su
-from saetass.cli import create_progress_bar, is_quiet, set_quiet
+from saetass.cli import (
+    create_progress_bar,
+    is_quiet,
+    output,
+    set_log_level,
+    set_quiet,
+    set_rich_logging,
+)
 from saetass.cli.banner import BannerManager
+from saetass.cli.output import DEFAULT_LOG_LEVEL, LOGGER_NAME
 
 R = np.linspace(0.0, 1.0, 11)
 P = np.logspace(0, 1, 5)
@@ -122,3 +134,60 @@ class TestQuiet:
         context = multiprocessing.get_context("spawn")
         with ProcessPoolExecutor(max_workers=1, mp_context=context) as pool:
             assert pool.submit(is_quiet).result()
+
+
+class TestLogging:
+    def test_messages_go_through_the_rich_console(self, capsys):
+        logger = logging.getLogger(LOGGER_NAME)
+        assert logger.level == logging.INFO and not logger.propagate
+        capsys.readouterr()
+        logging.getLogger(f"{LOGGER_NAME}.test").info("A message of SAETASS")
+        logging.getLogger(f"{LOGGER_NAME}.test").debug("A hidden message")
+        output = capsys.readouterr().out
+        assert "INFO" in output and "A message of SAETASS" in output
+        assert "hidden" not in output
+
+    def test_set_rich_logging(self, caplog):
+        logger = logging.getLogger(LOGGER_NAME)
+        set_rich_logging(False)
+        try:
+            assert logger.propagate and output._handler not in logger.handlers
+            logging.getLogger(f"{LOGGER_NAME}.test").info("To the root logger")
+            assert "To the root logger" in caplog.text
+        finally:
+            set_rich_logging(True)
+        set_rich_logging(True)  # idempotent
+        assert logger.handlers.count(output._handler) == 1 and not logger.propagate
+
+    @pytest.mark.parametrize(
+        "level, expected",
+        [("debug", logging.DEBUG), (" WARNING ", logging.WARNING), ("15", 15)]
+        + [(logging.ERROR, logging.ERROR)],
+    )
+    def test_set_log_level(self, level, expected):
+        logger = logging.getLogger(LOGGER_NAME)
+        try:
+            set_log_level(level)
+            assert logger.level == expected
+        finally:
+            set_log_level(DEFAULT_LOG_LEVEL)
+
+    @pytest.mark.parametrize("level", ["verbose", 1.5, True, None])
+    def test_invalid_log_level(self, level):
+        with pytest.raises(ValueError, match="must be a logging level"):
+            set_log_level(level)
+
+    def test_environment_variable_sets_the_level(self):
+        script = (
+            "import logging, saetass; "
+            "print(logging.getLogger('saetass').getEffectiveLevel())"
+        )
+        env = {**os.environ, "SAETASS_LOG_LEVEL": "warning"}
+        out = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert out.stdout.strip() == str(logging.WARNING)

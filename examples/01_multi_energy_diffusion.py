@@ -11,7 +11,6 @@ The script visualizes the time evolution of the cosmic ray spatial distribution,
 comparing it against theoretical steady-state profiles.
 """
 
-import logging
 import math
 import os
 
@@ -33,12 +32,6 @@ from saetass.utils.bubble_profiles import BubbleProfileCalculator
 # ---------------------------------------------------------
 # Configuration Setup
 # ---------------------------------------------------------
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(name)s: %(message)s",
-)
-logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 plt.rcParams.update(
     {
