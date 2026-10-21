@@ -371,6 +371,7 @@ def test_report_and_lookup():
     )
     report = str(diag)
     assert "advection" in report and "courant_number" in report and "WARNING" in report
+    assert diag.report(include_warnings=False) == report.split("\n  WARNING")[0]
     with pytest.raises(KeyError):
         diag["diffusion"]
     with pytest.raises(ValueError, match="n_samples"):
@@ -500,3 +501,17 @@ def test_fast_source_variation_triggers_the_splitting_warning(
         plt.legend()
         plt.grid(True, alpha=0.5)
         plt.show()
+
+
+@pytest.mark.parametrize("warn", [True, False])
+def test_logged_report_shows_each_warning_once(saetass_caplog, warn):
+    params = {
+        "advection": _advection(2.0),
+        "source": {"source": np.ones(R.size) * su.SOURCE_PSI_P},
+    }
+    solver = _solver("advection-source", params, t_end=20.0, num_timesteps=2)
+    with saetass_caplog.at_level(logging.DEBUG, logger="saetass"):
+        diag = solver.diagnostics(warn=warn)
+    (message,) = diag.warnings
+    assert saetass_caplog.text.count(message) == 1
+    assert len(_warnings(saetass_caplog)) == int(warn)

@@ -133,6 +133,22 @@ class SimulationDiagnostics:
         raise KeyError(f"No diagnostics for operator '{name}'.")
 
     def __str__(self) -> str:
+        return self.report()
+
+    def report(self, include_warnings: bool = True) -> str:
+        """
+        Text report of the diagnostics: one line per operator and the numbers involving several of them.
+
+        Parameters
+        ----------
+        include_warnings : bool, optional
+            Whether to end the report with the :py:attr:`warnings`. Default is ``True``.
+
+        Returns
+        -------
+        str
+            The report, as printed by ``print(diagnostics)``.
+        """
         lines = [
             f"SAETASS diagnostics: time step {self.time_step:.4g}, "
             f"worst case over {len(self.sampled_times)} sampled times"
@@ -148,7 +164,8 @@ class SimulationDiagnostics:
             lines.append(
                 "  " + ", ".join(f"{k} = {v:.4g}" for k, v in self.numbers.items())
             )
-        lines += [f"  WARNING: {message}" for message in self.warnings]
+        if include_warnings:
+            lines += [f"  WARNING: {message}" for message in self.warnings]
         return "\n".join(lines)
 
 

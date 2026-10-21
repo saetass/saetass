@@ -534,6 +534,9 @@ class Solver:
             The diagnostics of the simulation.
         """
         result = diagnose(self, n_samples=n_samples)
+        if logger.isEnabledFor(logging.DEBUG):
+            # The warnings are logged on their own below
+            logger.debug("%s", result.report(include_warnings=not warn))
         if warn:
             _warn(result)
         return result
