@@ -403,36 +403,38 @@ class Solver:
             manage_progress = True
 
         next_metrics = 0.0
-        for _ in range(n_steps):
-            self.global_step += 1
+        try:
+            for _ in range(n_steps):
+                self.global_step += 1
 
-            # The bar redraws a few times per second: computing the extrema of the
-            # state for every step would cost more than a step on small grids
-            update = {"completed": self.global_step}
-            now = time.monotonic()
-            if now >= next_metrics:
-                next_metrics = now + _PROGRESS_METRICS_INTERVAL
-                val_max = np.max(self.state._values)
-                val_min = np.min(self.state._values)
-                update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
-            self._progress.update(self._task_id, **update)
+                # The bar redraws a few times per second: computing the extrema of the
+                # state for every step would cost more than a step on small grids
+                update = {"completed": self.global_step}
+                now = time.monotonic()
+                if now >= next_metrics:
+                    next_metrics = now + _PROGRESS_METRICS_INTERVAL
+                    val_max = np.max(self.state._values)
+                    val_min = np.min(self.state._values)
+                    update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+                self._progress.update(self._task_id, **update)
 
-            self.splitting_scheme.apply(
-                self.operator_list,
-                self.operator_subsolvers,
-                self.substeps_per_op,
-                self.state,
-            )
+                self.splitting_scheme.apply(
+                    self.operator_list,
+                    self.operator_subsolvers,
+                    self.substeps_per_op,
+                    self.state,
+                )
+        finally:
+            # Also on errors: a live bar left running would swallow later output
+            if manage_progress or self.global_step >= self.total_steps:
+                if self._progress is not None:
+                    self._progress.stop()
+                    self._progress = None
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
             )
-
-        if manage_progress or self.global_step >= self.total_steps:
-            if self._progress is not None:
-                self._progress.stop()
-                self._progress = None
 
     def run(self) -> State:
         """Advances the solution to the final time, updating and returning the final :py:class:`~saetass.state.State` object.
