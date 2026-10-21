@@ -456,6 +456,33 @@ class TestLossSolverExceptionsAndEdges:
                 substeps={"loss": 1},
             )
 
+    def test_inflow_defaults_to_zero(self):
+        """Gains without an inflow value let nothing enter through the last face."""
+        grid = Grid(
+            p_centers=np.logspace(0, 2, 10) * su.MOMENTUM,
+            t_grid=np.linspace(0.0, 0.5, 6) * su.TIME,
+        )
+        params = {
+            "P_dot": np.full(10, 1.0) * su.MOMENTUM_LOSS_RATE,
+            "limiter": "minmod",
+            "order": 2,
+            "cfl": 0.5,
+        }
+
+        def run(extra):
+            state = State(psi_p=np.ones(10) * su.PSI_P, grid=grid)
+            solver = Solver(
+                grid=grid,
+                state=state,
+                problem_type="loss",
+                operator_params={"loss": {**params, **extra}},
+            )
+            return solver.run().psi_p.to_value(su.PSI_P)
+
+        np.testing.assert_array_equal(
+            run({}), run({"inflow_value_psi": 0.0 * su.PSI_P})
+        )
+
 
 class TestLossSolver2D:
     params = {

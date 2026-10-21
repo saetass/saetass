@@ -43,9 +43,9 @@ class LossSolver(HyperbolicSolver):
         cfl : float
             CFL number for the adaptive sub-step calculation.
         inflow_value_psi : astropy.units.Quantity, optional
-            Differential density :math:`\psi` at the high-momentum boundary, used as an inflow condition when :math:`\dot{p} > 0` (i.e. momentum gain). Units compatible with :py:data:`~saetass.units.PSI_P`.
+            Differential density :math:`\psi` at the high-momentum boundary, used as an inflow condition when :math:`\dot{p} > 0` (i.e. momentum gain). Units compatible with :py:data:`~saetass.units.PSI_P`. If neither ``inflow_value_psi`` nor ``inflow_value_U`` is given, nothing enters. Default is zero.
         inflow_value_U : astropy.units.Quantity, optional
-            Same inflow condition given directly for the conservative variable :math:`U = p \psi`. Mutually exclusive with ``inflow_value_psi``. Units compatible with :py:data:`~saetass.units.MOMENTUM` times :py:data:`~saetass.units.PSI_P`.
+            Same inflow condition given directly for the conservative variable :math:`U = p \psi`. Mutually exclusive with ``inflow_value_psi``. Units compatible with :py:data:`~saetass.units.MOMENTUM` times :py:data:`~saetass.units.PSI_P`. Default is zero.
         order : ``{1, 2}``
             Order of the numerical scheme.
         adiabatic_losses : bool, optional
@@ -123,6 +123,7 @@ class LossSolver(HyperbolicSolver):
             loss_params["inflow_value_U"] = self._generalized_variable(
                 loss_params.pop("inflow_value_psi"), grid
             )[-1]
+        loss_params.setdefault("inflow_value_U", 0.0)
 
         # Initialize the base class
         super().__init__(grid, t_grid, loss_params, **kwargs)
