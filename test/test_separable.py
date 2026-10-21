@@ -79,7 +79,7 @@ def _run(operator, two_d, value, scheme="strang", order=2):
     elif operator == "diffusion":
         params = {"diffusion": {"D_values": value, "psi_end": 0.0 * su.PSI_P}}
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=Particle.PROTON)
-    solver = Solver(grid, state, operator, params, splitting_scheme=scheme)
+    solver = Solver(state, operator, params, splitting_scheme=scheme)
     solver.run()
     return solver.state.psi_p.to_value(su.PSI_P), solver.operator_subsolvers[0]
 

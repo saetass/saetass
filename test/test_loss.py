@@ -50,7 +50,6 @@ def _make_loss_grid_and_solver(
     grid = Grid(p_centers=p_centers, t_grid=t_grid)
     state = State(psi_p=init_f, grid=grid, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="loss",
         operator_params={"loss": loss_params},
@@ -92,7 +91,6 @@ def _setup_loss_solver(
     grid = Grid(p_centers=p_c, t_grid=t_g)
     state = State(psi_p=init_f, grid=grid, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="loss",
         operator_params={"loss": loss_params},
@@ -335,7 +333,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         with pytest.raises(NotImplementedError, match="Adiabatic losses"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
@@ -362,7 +359,6 @@ class TestLossSolverExceptionsAndEdges:
         }
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="loss",
             operator_params={"loss": params},
@@ -386,7 +382,6 @@ class TestLossSolverExceptionsAndEdges:
         }
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="loss",
             operator_params={"loss": params},
@@ -424,7 +419,6 @@ class TestLossSolverExceptionsAndEdges:
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         with pytest.raises(ValueError, match="strictly positive momentum"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
@@ -449,7 +443,6 @@ class TestLossSolverExceptionsAndEdges:
             ValueError, match="either inflow_value_psi or inflow_value_U"
         ):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
@@ -472,7 +465,6 @@ class TestLossSolverExceptionsAndEdges:
         def run(extra):
             state = State(psi_p=np.ones(10) * su.PSI_P, grid=grid)
             solver = Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": {**params, **extra}},
@@ -499,7 +491,6 @@ class TestLossSolver2D:
         )
         with pytest.raises(ValueError, match="requires a Grid with a momentum axis"):
             Solver(
-                grid=grid,
                 state=State(psi_p=np.ones(5) * su.PSI_P, grid=grid),
                 problem_type="loss",
                 operator_params={
@@ -520,7 +511,6 @@ class TestLossSolver2D:
             r_centers=np.array([1.0, 2.0, 3.0]) * su.LENGTH, p_centers=p, t_grid=t_grid
         )
         solver_2d = Solver(
-            grid=grid_2d,
             state=State(psi_p=np.outer(profile, amplitudes) * su.PSI_P, grid=grid_2d),
             problem_type="loss",
             operator_params={
@@ -535,7 +525,6 @@ class TestLossSolver2D:
         for j, amplitude in enumerate(amplitudes):
             grid_1d = Grid(p_centers=p, t_grid=t_grid)
             solver_1d = Solver(
-                grid=grid_1d,
                 state=State(psi_p=amplitude * profile * su.PSI_P, grid=grid_1d),
                 problem_type="loss",
                 operator_params={
@@ -563,7 +552,6 @@ class TestLossSolver2D:
 
         def subcycles(grid, P):
             solver = Solver(
-                grid=grid,
                 state=State(psi_p=np.ones(grid.shape) * su.PSI_P, grid=grid),
                 problem_type="loss",
                 operator_params={"loss": {**self.params, "P_dot": P}},

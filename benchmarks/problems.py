@@ -93,7 +93,6 @@ def _make_solver(
     )
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=particle)
     return Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=operator_params,

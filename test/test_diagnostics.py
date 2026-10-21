@@ -30,7 +30,6 @@ def _solver(problem_type, params, t_end=1.0, num_timesteps=10, p=None):
     shape = R.shape if p is None else (p.size, R.size)
     psi = np.broadcast_to(np.exp(-((R - 5.0) ** 2)), shape)
     return Solver(
-        grid=grid,
         state=State(grid=grid, psi_p=psi * su.PSI_P),
         problem_type=problem_type,
         operator_params=params,

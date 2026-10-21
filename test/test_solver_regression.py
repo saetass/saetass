@@ -47,7 +47,6 @@ def _run(problem_type, params, psi, r=None, p=None, dt=1e-3, scheme="strang"):
     )
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=params,

@@ -271,7 +271,7 @@ class Solver:
     """
     Main class to manage the simulation workflow. It initializes operators based on the specified problem type and coordinates the time advancement of the solution.
 
-    In the initialization phase, the :py:class:`~saetass.solver.Solver` class takes in the associated :py:class:`~saetass.grid.Grid`, initial :py:class:`~saetass.state.State`, problem type, operator parameters, substep counts and splitting scheme.
+    In the initialization phase, the :py:class:`~saetass.solver.Solver` class takes in the initial :py:class:`~saetass.state.State`, whose :py:class:`~saetass.grid.Grid` defines the cells and the time grid of the simulation, the problem type, operator parameters, substep counts and splitting scheme.
     It parses the problem type to determine which operators are involved and initializes them with their own refined time grids based on the specified splitting type.
 
     Any object of the :py:class:`~saetass.solver.Solver` class exposes two main methods: :py:meth:`~saetass.solver.Solver.step` for advancing the solution by some amount of time steps and :py:meth:`~saetass.solver.Solver.run` for running the entire simulation.
@@ -279,10 +279,8 @@ class Solver:
 
     Parameters
     ----------
-    grid : :py:class:`~saetass.grid.Grid`
-        :py:class:`~saetass.grid.Grid` object containing spatial and momentum grids and time grid.
     state : :py:class:`~saetass.state.State`
-        :py:class:`~saetass.state.State` object containing the initial distribution.
+        :py:class:`~saetass.state.State` object containing the initial distribution. Its :py:class:`~saetass.grid.Grid`, :py:attr:`~saetass.solver.Solver.grid`, provides the spatial and momentum cells and the time grid of the simulation.
     problem_type : str
         String specifying the type of problem and which operators to include. Valid operators are defined in
         :py:class:`~saetass.solver.OperatorType` (e.g., "advection-diffusion-loss-source"). The order of the operators will affect the behaviour of :py:class:`~saetass.splitting.SplittingScheme`.
@@ -300,7 +298,6 @@ class Solver:
 
     def __init__(
         self,
-        grid: Grid,
         state: State,
         problem_type: str,
         operator_params: dict = None,
@@ -311,8 +308,14 @@ class Solver:
         # Print the banner on initialization
         print_banner()
 
-        self.grid = grid
+        if not isinstance(state, State):
+            raise TypeError(
+                f"Solver takes the initial State as first argument, not "
+                f"{type(state).__name__}: the Grid of the simulation is that of the State."
+            )
         self.state = state
+        #: :py:class:`~saetass.grid.Grid` of the simulation, that of :py:attr:`state`.
+        self.grid = state.grid
         self.problem_type = problem_type.lower()
 
         # Store operator parameters (nested dict)

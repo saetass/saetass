@@ -22,7 +22,6 @@ class TestTimeDependence:
         # 1. Static solver
         state_static = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_static = Solver(
-            grid=grid,
             state=state_static,
             problem_type="advection",
             operator_params={
@@ -45,7 +44,6 @@ class TestTimeDependence:
 
         state_dynamic = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_dynamic = Solver(
-            grid=grid,
             state=state_dynamic,
             problem_type="advection",
             operator_params={
@@ -83,7 +81,6 @@ class TestTimeDependence:
         # 1. Static solver
         state_static = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_static = Solver(
-            grid=grid,
             state=state_static,
             problem_type="diffusion",
             operator_params={
@@ -103,7 +100,6 @@ class TestTimeDependence:
 
         state_dynamic = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_dynamic = Solver(
-            grid=grid,
             state=state_dynamic,
             problem_type="diffusion",
             operator_params={
@@ -137,7 +133,6 @@ class TestTimeDependence:
         # 1. Static solver
         state_static = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_static = Solver(
-            grid=grid,
             state=state_static,
             problem_type="source",
             operator_params={
@@ -157,7 +152,6 @@ class TestTimeDependence:
 
         state_dynamic = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_dynamic = Solver(
-            grid=grid,
             state=state_dynamic,
             problem_type="source",
             operator_params={
@@ -197,7 +191,6 @@ class TestTimeDependence:
 
         state_dynamic = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
         solver_dynamic = Solver(
-            grid=grid,
             state=state_dynamic,
             problem_type="source",
             operator_params={
@@ -245,7 +238,6 @@ class TestTimeDependence:
         state = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
 
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="advection",
             operator_params={
@@ -367,7 +359,6 @@ class TestTimeDependence:
         state = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
 
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="diffusion",
             operator_params={
@@ -464,7 +455,6 @@ class TestTimeDependence:
         state = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
 
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="advection-source",
             operator_params={
@@ -595,7 +585,6 @@ class TestTimeDependence:
         state = State(psi_p=f_init.copy(), grid=grid, particle=Particle.PROTON)
 
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="diffusion-source",
             operator_params={

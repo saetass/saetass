@@ -60,7 +60,6 @@ def run_advection_simulation(
         problem_type = "advection"
 
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=operator_params,

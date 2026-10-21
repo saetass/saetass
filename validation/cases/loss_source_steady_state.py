@@ -35,7 +35,6 @@ def run_loss_simulation(p_grid, t_grid, psi_initial, operator_params, sample_cou
         problem_type = "loss"
 
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=operator_params,

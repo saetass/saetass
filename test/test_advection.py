@@ -42,7 +42,6 @@ def run_advection_test(grid_params, solver_params, initial_f):
 
     # Create solver
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="advection",
         operator_params={"advection": solver_params},
@@ -257,7 +256,6 @@ class TestAdvectionSolverExceptionsAndEdges:
             match=r"Missing required AdvectionSolver parameter\(s\) \['cfl'\]",
         ):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="advection",
                 operator_params={"advection": params},
@@ -269,7 +267,6 @@ class TestAdvectionSolverExceptionsAndEdges:
         params["limiter"] = "invalid_limiter"
         with pytest.raises(ValueError, match="limiter must be"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="advection",
                 operator_params={"advection": params},
@@ -295,7 +292,6 @@ class TestAdvectionSolverExceptionsAndEdges:
                 "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
             }
             solver = Solver(
-                grid=grid,
                 state=state.clone(),
                 problem_type="advection",
                 operator_params={"advection": params},

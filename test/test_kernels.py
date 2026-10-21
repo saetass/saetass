@@ -75,7 +75,7 @@ def _hyperbolic_solver(problem_type, params, r=None, p=None, psi=None):
         t_grid=np.linspace(0.0, 1e-3, 3) * su.TIME,
     )
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=Particle.PROTON)
-    return Solver(grid, state, problem_type, {problem_type: params})
+    return Solver(state, problem_type, {problem_type: params})
 
 
 def test_two_cell_grid_has_zero_slopes():
@@ -248,7 +248,7 @@ def test_psi_end_must_match_the_momenta():
         "D_values": np.ones((3, 5)) * su.DIFFUSION_COEFFICIENT,
         "psi_end": lambda t: np.zeros(2) * su.PSI_P,
     }
-    solver = Solver(grid, state, "diffusion", {"diffusion": params})
+    solver = Solver(state, "diffusion", {"diffusion": params})
     with pytest.raises(ValueError, match="psi_end must have 1 or 3 values"):
         solver.run()
 
@@ -333,4 +333,4 @@ def test_dynamic_coefficients_must_match_the_grid():
     state = State(grid=grid, psi_p=np.ones((3, 5)) * su.PSI_P, particle=Particle.PROTON)
     params = {"D_values": lambda t: np.ones((2, 5)) * su.DIFFUSION_COEFFICIENT}
     with pytest.raises(ValueError, match="2D D_values must have shape"):
-        Solver(grid, state, "diffusion", {"diffusion": params})
+        Solver(state, "diffusion", {"diffusion": params})

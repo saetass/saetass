@@ -305,7 +305,6 @@ if __name__ == "__main__":
             # 3. Instantiate Solver
             # We then instantiate Solver class
             solver = Solver(
-                grid=grid,
                 state=State(
                     psi_p=f_values * su.PSI_P, grid=grid, particle=Particle.PROTON
                 ),
