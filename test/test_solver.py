@@ -7,10 +7,11 @@ import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor
 
+import numba
 import numpy as np
 import pytest
 
-from saetass import Grid, Separable, Solver, State
+from saetass import Grid, Separable, Solver, State, parallel
 from saetass import units as su
 from saetass.cli import (
     create_progress_bar,
@@ -144,6 +145,11 @@ def debug_log(saetass_caplog):
         yield saetass_caplog
 
 
+def _double_rows(x):
+    for i in numba.prange(x.size):
+        x[i] *= 2.0
+
+
 class TestLogging:
     def test_messages_go_through_the_rich_console(self, capsys):
         logger = logging.getLogger(LOGGER_NAME)
@@ -254,3 +260,24 @@ class TestLogging:
         assert "Advance finished at step 2/2" in text
         if expected.startswith("static"):
             assert "1 CFL sub-cycle for 1 step from t = 0 Myr" in text
+
+    def test_kernel_messages(self, debug_log, monkeypatch):
+        kernel = parallel.TwinKernel(_double_rows)
+        x = np.ones(4)
+        kernel(1, x)
+        kernel(1, x)
+        np.testing.assert_array_equal(x, 4.0)
+        assert debug_log.text.count("Kernel _double_rows (serial): first call") == 1
+
+        monkeypatch.setattr(parallel, "_load_sample", None)
+        parallel._idle_cores()
+        assert "Cores kept busy by other processes" in debug_log.text
+
+    def test_thread_team_message(self, debug_log, monkeypatch):
+        monkeypatch.setattr(parallel, "team_size", lambda work_ns: 3)
+        monkeypatch.setattr(parallel, "_logged_team", 1)
+        parallel.reset_team()
+        assert parallel.threads_for(4, 1e6) == 3
+        assert parallel.threads_for(4, 1e6) == 3
+        assert debug_log.text.count("Kernel thread team: 3 threads") == 1
+        parallel.reset_team()

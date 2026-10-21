@@ -20,6 +20,7 @@ The threads available to Numba, which bound every call, are set with ``NUMBA_NUM
 """
 
 import functools
+import logging
 import math
 import os
 import subprocess
@@ -33,6 +34,8 @@ from typing import Any
 import numba
 from numba import njit
 
+from .cli.output import plural
+
 __all__ = [
     "MIN_PARALLEL_WORK_NS",
     "MIN_WORK_PER_THREAD_NS",
@@ -45,6 +48,8 @@ __all__ = [
     "TwinKernel",
     "usable_cores",
 ]
+
+logger = logging.getLogger(__name__)
 
 #: Minimum estimated serial work of a kernel call, in nanoseconds, for it to run in parallel.
 MIN_PARALLEL_WORK_NS = 100_000.0
@@ -110,6 +115,9 @@ def set_max_threads(n: int | None) -> None:
 #: Largest estimated work of a parallel call since the last :py:func:`reset_team`, in nanoseconds.
 _team_work_ns = 0.0
 
+#: Threads of the last team reported to the debug log.
+_logged_team = 1
+
 
 def reset_team() -> None:
     """
@@ -137,11 +145,23 @@ def threads_for(rows: int, work_ns: float) -> int:
     int
         ``1`` for a serial call, otherwise the team of the largest call so far, :py:func:`team_size`, whatever the rows of this call (threads without rows idle briefly, which costs less than resizing the team).
     """
-    global _team_work_ns
+    global _team_work_ns, _logged_team
     if rows < 2 or work_ns < MIN_PARALLEL_WORK_NS:
         return 1
     _team_work_ns = max(_team_work_ns, work_ns)
-    return team_size(_team_work_ns)
+    n = team_size(_team_work_ns)
+    if n != _logged_team:
+        _logged_team = n
+        logger.debug(
+            "Kernel thread team: %s for calls of about %.0f us "
+            "(usable cores %d, limit %s, Numba threads %d)",
+            plural(n, "thread"),
+            _team_work_ns / 1e3,
+            usable_cores(),
+            _max_threads,
+            numba.get_num_threads(),
+        )
+    return n
 
 
 def team_size(work_ns: float | None = None) -> int:
@@ -256,6 +276,11 @@ def _idle_cores() -> int:
     now = time.monotonic()
     if _load_sample is None or now - _load_sample[0] > _LOAD_LIFETIME:
         _load_sample = (now, _busy_cpus(_affinity()))
+        logger.debug(
+            "Cores kept busy by other processes: %.1f of %d usable",
+            _load_sample[1],
+            usable_cores(),
+        )
     return max(1, usable_cores() - math.ceil(_load_sample[1]))
 
 
@@ -327,8 +352,16 @@ class TwinKernel:
         parallel_func.__qualname__ = f"{py_func.__qualname__}_parallel"
         parallel_func.__module__ = py_func.__module__
         self.parallel = njit(parallel=True, cache=True, **flags)(parallel_func)
+        # Versions not called yet: their first call compiles them or loads them from the cache
+        self._first_calls = {"serial", "parallel"}
 
     def __call__(self, n_threads: int, *args: Any) -> Any:
+        version = "serial" if n_threads <= 1 else "parallel"
+        if version in self._first_calls:
+            return self._first_call(version, n_threads, args)
+        return self._call(n_threads, args)
+
+    def _call(self, n_threads: int, args: tuple) -> Any:
         if n_threads <= 1:
             return self.serial(*args)
         previous = numba.get_num_threads()
@@ -337,6 +370,20 @@ class TwinKernel:
             return self.parallel(*args)
         finally:
             numba.set_num_threads(previous)
+
+    def _first_call(self, version: str, n_threads: int, args: tuple) -> Any:
+        """Call a version for the first time, reporting how long compiling or loading it took."""
+        start = time.perf_counter()
+        result = self._call(n_threads, args)
+        self._first_calls.discard(version)
+        logger.debug(
+            "Kernel %s (%s): first call, including its compilation or cache load, "
+            "took %.3g s",
+            self.py_func.__name__,
+            version,
+            time.perf_counter() - start,
+        )
+        return result
 
 
 def twin_kernel(**flags: Any) -> Callable[[Callable], TwinKernel]:
