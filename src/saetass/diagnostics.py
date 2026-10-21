@@ -14,7 +14,7 @@ Each operator reports its characteristic timescale and the dimensionless numbers
   The magnitude of a source does not define a timescale: the transport equation is linear, so scaling :math:`Q` only scales the part of the solution it produces, while each step injects :math:`Q` evaluated at its start, which is accurate only if :math:`Q` changes little within the step.
   Static sources report no scales.
 - **With several operators**, the splitting ratio :math:`\Delta t / \tau_\mathrm{min}` compares the global time step to the shortest operator timescale, which controls the operator-splitting and time-integration errors.
-  A warning is issued when it exceeds :py:data:`WARNING_SPLITTING_RATIO`, with the number of timesteps needed to bring it below.
+  A warning is logged when it exceeds :py:data:`WARNING_SPLITTING_RATIO`, with the number of timesteps needed to bring it below.
 - **Pairs of operators** report cell numbers comparing their rates at the grid scale, as the largest value over the cells where both act:
 
   - the cell Péclet number :math:`|v| \Delta r / D`, with advection and diffusion, tells which of them dominates;
@@ -27,15 +27,17 @@ Since parameters may depend on time, every quantity is evaluated at several time
 
 .. code-block:: python
 
-    diagnostics = solver.diagnostics()  # warns about problematic time steps
+    diagnostics = solver.diagnostics()  # logs a warning for each problematic time step
     print(diagnostics)
     diagnostics["diffusion"].numbers["fourier_number"]
+
+Warnings are logged at the ``WARNING`` level, on the console of SAETASS (see :py:mod:`saetass.cli.output`), and are always available in :py:attr:`SimulationDiagnostics.warnings`.
 
 --------------
 """
 
+import logging
 import math
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -49,14 +51,12 @@ from . import units as su
 if TYPE_CHECKING:
     from .solver import Solver
 
-#: Splitting ratio above which a warning is issued. Splitting and time-integration errors
+logger = logging.getLogger(__name__)
+
+#: Splitting ratio above which a warning is logged. Splitting and time-integration errors
 #: grow with this ratio, reaching a fraction of it for first-order steps, so this value
 #: keeps them at the level of a few percent.
 WARNING_SPLITTING_RATIO = 0.1
-
-
-class DiagnosticsWarning(UserWarning):
-    """Warning about a time step that compromises the accuracy of a simulation."""
 
 
 @dataclass(frozen=True)
@@ -276,6 +276,6 @@ def _cell_ratio(numerator: np.ndarray, denominator: np.ndarray) -> float:
 
 
 def warn(diagnostics: SimulationDiagnostics) -> None:
-    """Issue a :py:class:`DiagnosticsWarning` for each problem found in ``diagnostics``."""
+    """Log a warning for each problem found in ``diagnostics``."""
     for message in diagnostics.warnings:
-        warnings.warn(message, DiagnosticsWarning, stacklevel=3)
+        logger.warning(message)

@@ -526,7 +526,7 @@ class Solver:
         n_samples : int, optional
             Number of times, evenly spread over the time grid, at which time-dependent parameters are evaluated. Default is ``3``.
         warn : bool, optional
-            Whether to issue a :py:class:`~saetass.diagnostics.DiagnosticsWarning` for each problem found. Default is ``True``.
+            Whether to log a warning for each problem found. Default is ``True``.
 
         Returns
         -------
