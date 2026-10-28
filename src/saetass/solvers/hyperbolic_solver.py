@@ -35,6 +35,15 @@ from . import hyperbolic_kernels as kernels
 
 logger = logging.getLogger(__name__)
 
+#: Order of the scheme when none is given: second-order MUSCL-Hancock.
+DEFAULT_ORDER = 2
+
+#: Slope limiter of the second-order scheme when none is given.
+DEFAULT_LIMITER = "minmod"
+
+#: CFL number when none is given.
+DEFAULT_CFL = 0.5
+
 #: Fraction of a step below which the remaining time of a CFL sub-cycling loop is rounding residue.
 _TIME_TOLERANCE = 1e-12
 
@@ -64,18 +73,19 @@ class HyperbolicSolver(SubSolver, ABC):
         V_centers : numpy.ndarray or callable
             Generalized velocities at cell centers. Shape must match
             grid dimensions. A callable must have signature ``V_centers(t: float) -> numpy.ndarray``.
-        limiter : ``{'minmod', 'vanleer', 'mc'}``
-            Slope limiter used for second-order schemes.
-        cfl : float
+        limiter : ``{'minmod', 'vanleer', 'mc'}``, optional
+            Slope limiter of the second-order scheme. Default is ``'minmod'`` for order 2; it must not be given for order 1, which does not limit slopes.
+        cfl : float, optional
             CFL (Courant-Friedrichs-Lewy) number for stable time
-            step calculation.
+            step calculation. Default is ``0.5``.
         inflow_value_U : float or numpy.ndarray
             Value of the conservative variable :math:`U` at the outer boundary
             for inflow conditions.
-        order : ``{1, 2}``
+        order : ``{1, 2}``, optional
             Order of the numerical scheme:
             * 1: First-order upwind.
             * 2: Second-order MUSCL-Hancock.
+            Default is ``2``.
         axis : ``{0, 1}``
             Integer indicating the main axis of the problem:
             * 0: Momentum axis.
@@ -85,9 +95,9 @@ class HyperbolicSolver(SubSolver, ABC):
     #: Numerical options shared by all hyperbolic subsolvers (extended by subclasses).
     PARAM_SPECS = MappingProxyType(
         {
-            "limiter": ParamSpec(required=True),
-            "cfl": ParamSpec(required=True),
-            "order": ParamSpec(required=True),
+            "limiter": ParamSpec(),
+            "cfl": ParamSpec(),
+            "order": ParamSpec(),
         }
     )
 
@@ -340,8 +350,13 @@ class HyperbolicSolver(SubSolver, ABC):
     def _describe(self) -> str:
         """Scheme, rows and velocities of the operator, for the debug log."""
         rows = 1 if self.M is None else self.M
+        scheme = (
+            f"order 2, {self.limiter} limiter"
+            if self.order == 2
+            else "order 1 (upwind)"
+        )
         text = (
-            f"order {self.order}, {self.limiter} limiter, CFL number {self.cfl:g}, "
+            f"{scheme}, CFL number {self.cfl:g}, "
             f"{plural(rows, 'row')} of {plural(self.N, 'cell')}, "
             f"time step {self._dt:.4g} {su.TIME}; "
         )
@@ -499,7 +514,8 @@ class HyperbolicSolver(SubSolver, ABC):
             self.inflow_value_U,
             steps,
             self.order,
-            kernels.LIMITERS[self.limiter],
+            # Any code for order 1, whose kernels do not limit slopes
+            kernels.LIMITERS[self.limiter or DEFAULT_LIMITER],
             self._left_mode or kernels.LEFT_ZERO_FLUX,
             self._SPHERICAL_SLOPES,
             transform,
@@ -544,15 +560,30 @@ class HyperbolicSolver(SubSolver, ABC):
 
         # Note: V_centers is handled locally in __init__ now due to static/callable checks
 
-        # --- limiter ---
-        limiter = params["limiter"]
-        if limiter not in {"minmod", "vanleer", "mc"}:
-            raise ValueError("limiter must be 'minmod', 'vanleer' or 'mc'")
-        self.limiter: Literal["minmod", "vanleer", "mc"] = limiter
+        # --- order ---
+        order = int(params.get("order", DEFAULT_ORDER))
+        if order not in {1, 2}:
+            raise ValueError("order must be 1 or 2")
+        self.order: Literal[1, 2] = order
+
+        # --- limiter: only the second-order scheme limits slopes ---
+        limiter = params.get("limiter")
+        if self.order == 1:
+            if limiter is not None:
+                raise ValueError(
+                    "The limiter only applies to order 2 (MUSCL-Hancock): remove it "
+                    "for order 1 (upwind)."
+                )
+        else:
+            if limiter is None:
+                limiter = DEFAULT_LIMITER
+            if limiter not in {"minmod", "vanleer", "mc"}:
+                raise ValueError("limiter must be 'minmod', 'vanleer' or 'mc'")
+        self.limiter: Literal["minmod", "vanleer", "mc"] | None = limiter
 
         # --- cfl ---
         try:
-            self.cfl: float = float(params["cfl"])
+            self.cfl: float = float(params.get("cfl", DEFAULT_CFL))
         except Exception:
             raise ValueError("cfl must be a float")
 
@@ -560,12 +591,6 @@ class HyperbolicSolver(SubSolver, ABC):
         self.inflow_value_U = params["inflow_value_U"]
         # convert to 1D plain row array
         self.inflow_value_U = np.asarray(self.inflow_value_U, dtype=float).flatten()
-
-        # --- order ---
-        order = int(params["order"])
-        if order not in {1, 2}:
-            raise ValueError("order must be 1 or 2")
-        self.order: Literal[1, 2] = order
 
     def _unpack_grid(self, grid: Grid):
         """Unpack and validate grid object."""

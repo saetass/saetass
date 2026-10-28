@@ -118,7 +118,8 @@ def _time_factor(function):
 
 
 def _hyperbolic_options(order: int = 2, limiter: str = "minmod") -> dict:
-    return {"order": order, "limiter": limiter, "cfl": 0.8}
+    # Only the second-order scheme takes a limiter
+    return {"order": order, "cfl": 0.8, **({"limiter": limiter} if order == 2 else {})}
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +391,8 @@ def operator_case(operator: str, shape: tuple[int, ...], **options) -> OperatorC
     for key in ("order", "limiter"):
         if key in options:
             params[key] = options.pop(key)
+    if params.get("order") == 1:
+        params.pop("limiter", None)
     if options:
         raise TypeError(f"Unexpected options {sorted(options)}")
 

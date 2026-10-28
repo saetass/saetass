@@ -28,7 +28,6 @@ class TestTimeDependence:
                 "advection": {
                     "v_centers": np.full(num_r, v_const) * su.VELOCITY,
                     "order": 1,
-                    "limiter": "minmod",
                     "cfl": 0.8,
                     "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
                 }
@@ -50,7 +49,6 @@ class TestTimeDependence:
                 "advection": {
                     "v_centers": v_callable,
                     "order": 1,
-                    "limiter": "minmod",
                     "cfl": 0.8,
                     "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
                 }

@@ -101,7 +101,7 @@ def _advection_params(order, inflow):
         "v_centers": np.ones(5) * su.VELOCITY,
         "inflow_value_U": inflow * su.AREA * su.PSI_P,
         "order": order,
-        "limiter": "minmod",
+        **({"limiter": "minmod"} if order == 2 else {}),
         "cfl": 0.5,
     }
 

@@ -189,8 +189,8 @@ class TestSolverParameterConversion:
     @pytest.mark.parametrize(
         "operator, missing",
         [
-            ("advection", ["cfl", "inflow_value_U", "limiter", "order", "v_centers"]),
-            ("loss", ["P_dot", "cfl", "limiter", "order"]),
+            ("advection", ["inflow_value_U", "v_centers"]),
+            ("loss", ["P_dot"]),
             ("diffusion", ["D_values"]),
             ("source", ["source"]),
         ],

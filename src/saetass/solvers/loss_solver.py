@@ -38,16 +38,16 @@ class LossSolver(HyperbolicSolver):
 
         P_dot : astropy.units.Quantity or callable
             Momentum loss rate, :math:`\dot{p}`, at cell centers. Units compatible with :py:data:`~saetass.units.MOMENTUM_LOSS_RATE`. A callable must have signature ``P_dot(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
-        limiter : ``{'minmod', 'vanleer', 'mc'}``
-            Slope limiter used for second-order schemes.
-        cfl : float
-            CFL number for the adaptive sub-step calculation.
+        limiter : ``{'minmod', 'vanleer', 'mc'}``, optional
+            Slope limiter of the second-order scheme. Default is ``'minmod'`` for order 2; it must not be given for order 1, which does not limit slopes.
+        cfl : float, optional
+            CFL number for the adaptive sub-step calculation. Default is ``0.5``.
         inflow_value_psi : astropy.units.Quantity, optional
             Differential density :math:`\psi` at the high-momentum boundary, used as an inflow condition when :math:`\dot{p} > 0` (i.e. momentum gain). Units compatible with :py:data:`~saetass.units.PSI_P`. If neither ``inflow_value_psi`` nor ``inflow_value_U`` is given, nothing enters. Default is zero.
         inflow_value_U : astropy.units.Quantity, optional
             Same inflow condition given directly for the conservative variable :math:`U = p \psi`. Mutually exclusive with ``inflow_value_psi``. Units compatible with :py:data:`~saetass.units.MOMENTUM` times :py:data:`~saetass.units.PSI_P`. Default is zero.
-        order : ``{1, 2}``
-            Order of the numerical scheme.
+        order : ``{1, 2}``, optional
+            Order of the numerical scheme: 1 for first-order upwind, 2 for second-order MUSCL-Hancock. Default is ``2``.
         adiabatic_losses : bool, optional
             Reserved for adiabatic losses, which are not implemented yet: ``True`` raises :py:class:`NotImplementedError`. Default is ``False``.
         v_centers_physical : astropy.units.Quantity, optional

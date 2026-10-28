@@ -62,7 +62,7 @@ def _run(operator, two_d, value, scheme="strang", order=2):
                 "v_centers": value,
                 "inflow_value_U": 0.01 * su.AREA * su.PSI_P,
                 "order": order,
-                "limiter": "minmod",
+                **({"limiter": "minmod"} if order == 2 else {}),
                 "cfl": 0.8,
             }
         }
@@ -72,7 +72,7 @@ def _run(operator, two_d, value, scheme="strang", order=2):
                 "P_dot": value,
                 "inflow_value_U": 0.0 * su.MOMENTUM * su.PSI_P,
                 "order": order,
-                "limiter": "vanleer",
+                **({"limiter": "vanleer"} if order == 2 else {}),
                 "cfl": 0.8,
             }
         }
@@ -207,7 +207,6 @@ def test_separable_units_are_checked():
         [np.ones(R.size) * su.VELOCITY], [lambda t: 2.0 * su.LENGTH]
     )
     required = {
-        "limiter": "minmod",
         "cfl": 0.5,
         "order": 1,
         "inflow_value_U": 0.0 * su.AREA * su.PSI_P,

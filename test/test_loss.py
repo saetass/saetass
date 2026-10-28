@@ -40,7 +40,7 @@ def _make_loss_grid_and_solver(
 
     loss_params = {
         "P_dot": P_dot,
-        "limiter": "minmod",
+        **({"limiter": "minmod"} if order == 2 else {}),
         "cfl": cfl,
         "inflow_value_U": np.zeros(1) * su.MOMENTUM * su.PSI_P,
         "order": order,
@@ -81,7 +81,7 @@ def _setup_loss_solver(
 
     loss_params = {
         "P_dot": p_dot_in,
-        "limiter": "minmod",
+        **({"limiter": "minmod"} if order == 2 else {}),
         "cfl": cfl,
         "inflow_value_U": np.zeros(1) * su.MOMENTUM * su.PSI_P,
         "order": order,
@@ -322,7 +322,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
-            "limiter": "minmod",
             "cfl": 0.5,
             "order": 1,
             "adiabatic_losses": True,
@@ -352,7 +351,6 @@ class TestLossSolverExceptionsAndEdges:
         params = {
             "P_dot": p_dot_func,
             "adiabatic_losses": False,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -375,7 +373,6 @@ class TestLossSolverExceptionsAndEdges:
         params = {
             "P_dot": np.array([-1.0, -1.0]) * su.MOMENTUM_LOSS_RATE,
             "adiabatic_losses": False,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -411,7 +408,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.array([-1.0, -1.0]) * su.MOMENTUM_LOSS_RATE,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -432,7 +428,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.full(10, -1.0) * su.MOMENTUM_LOSS_RATE,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -478,7 +473,6 @@ class TestLossSolverExceptionsAndEdges:
 
 class TestLossSolver2D:
     params = {
-        "limiter": "minmod",
         "order": 1,
         "cfl": 0.5,
         "inflow_value_psi": 0.0 * su.PSI_P,
