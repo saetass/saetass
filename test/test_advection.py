@@ -339,3 +339,43 @@ class TestAdvectionSolverExceptionsAndEdges:
             solver.step(1)
             # Just test it executes successfully
             assert np.any(solver.state.psi_p.to_value(su.PSI_P))
+
+
+@pytest.mark.parametrize("limiter", ["minmod", "vanleer", "mc"])
+def test_smooth_pulse_converges_at_second_order(limiter):
+    """A Gaussian pulse moved at constant speed converges at second order with every limiter."""
+    v, t_final = 1.0, 0.4
+    gaussian = lambda x: np.exp(-(((x - 0.9) / 0.15) ** 2))  # noqa: E731
+
+    def error(num_r):
+        r = np.linspace(0.0, 2.0, num_r)
+        solver = Solver(
+            state=State(
+                psi_p=gaussian(r) * su.PSI_P,
+                grid=Grid(
+                    r_centers=r * su.LENGTH,
+                    t_grid=np.linspace(0, t_final, 41) * su.TIME,
+                ),
+                particle=Particle.PROTON,
+            ),
+            problem_type="advection",
+            operator_params={
+                "advection": {
+                    "v_centers": np.full(num_r, v) * su.VELOCITY,
+                    "limiter": limiter,
+                    "cfl": 0.5,
+                    "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+                }
+            },
+        )
+        solver.step(40)
+        # U = r^2 psi is shifted rigidly, so psi = (R / r)^2 psi_0(R) with R = r - v t
+        R = r - v * t_final
+        exact = (R[1:] / r[1:]) ** 2 * gaussian(R[1:])
+        keep = r[1:] > 0.2
+        diff = solver.state.psi_p.to_value(su.PSI_P)[1:] - exact
+        return np.linalg.norm(diff[keep]) / np.linalg.norm(exact[keep])
+
+    errors = [error(n) for n in (160, 320, 640)]
+    orders = np.log2(np.array(errors[:-1]) / np.array(errors[1:]))
+    assert np.all(orders > 1.5), (errors, orders)
