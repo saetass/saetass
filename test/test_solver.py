@@ -26,6 +26,7 @@ from saetass.cli import (
 from saetass.cli.banner import (
     DEFAULT_BANNER,
     DEFAULT_TITLE,
+    SMALL_BANNER,
     BannerManager,
     print_banner,
 )
@@ -323,10 +324,19 @@ class TestBanner:
         assert "Spherical Symmetry" in "\n".join(lines)
         assert all(len(line) <= 60 for line in lines)
 
+    @pytest.mark.parametrize("width", [39, 22])
+    def test_small_art_in_narrow_terminals(self, width):
+        lines = self._render(width)
+        art = SMALL_BANNER.strip("\n").splitlines()
+        assert "─ SAETASS ─" in lines[0]
+        assert lines[1].strip("│ ") == art[0].strip()
+        assert "Spherical" in "\n".join(lines)
+        assert all(len(line) <= width for line in lines)
+
     @pytest.mark.parametrize(
         "kwargs",
-        [{"width": 38}, {"width": 120, "terminal": False}],
-        ids=["narrow", "not_a_terminal"],
+        [{"width": 21}, {"width": 120, "terminal": False}],
+        ids=["very_narrow", "not_a_terminal"],
     )
     def test_title_alone_otherwise(self, kwargs):
         lines = self._render(**kwargs)
