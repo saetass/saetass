@@ -217,9 +217,9 @@ def test_separable_units_are_checked():
     with pytest.raises(u.UnitsError):
         canonical(0.0)
 
-    not_dynamic = Separable([np.ones(R.size) * su.VELOCITY], [1.0])
+    not_dynamic = Separable([np.ones(R.size) * su.PSI_P], [1.0])
     with pytest.raises(TypeError, match="does not accept a Separable"):
-        LossSolver.convert_params({"v_centers_physical": not_dynamic}, grid)
+        LossSolver.convert_params({"inflow_value_psi": not_dynamic}, grid)
 
 
 def test_profiles_broadcast_to_a_common_shape():
