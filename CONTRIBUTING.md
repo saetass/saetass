@@ -6,15 +6,16 @@ Please take a moment to review this guide before submitting your contribution.
 
 ## Table of contents
 
-- [Code of conduct](#-code-of-conduct)
-- [How can I contribute?](#-how-can-i-contribute)
-  - [Reporting bugs](#-reporting-bugs)
-  - [Suggesting features](#-suggesting-features)
-  - [Contributing Code](#-contributing-code)
-- [Development Setup](#-development-setup)
-- [Code Style and Standards](#-code-style-and-standards)
-- [Supported versions](#-supported-versions)
-- [Pull Request Process](#-pull-request-process)
+- [Code of conduct](#code-of-conduct)
+- [How can I contribute?](#how-can-i-contribute)
+  - [Reporting bugs](#reporting-bugs)
+  - [Suggesting features](#suggesting-features)
+  - [Contributing Code](#contributing-code)
+- [Development Setup](#development-setup)
+- [Code Style and Standards](#code-style-and-standards)
+- [Supported versions](#supported-versions)
+- [Pull Request Process](#pull-request-process)
+- [Releasing](#releasing)
 
 ## Code of Conduct
 
@@ -24,22 +25,11 @@ This project adheres to the [**Contributor Covenant Code of Conduct**](CODE_OF_C
 
 ### Reporting bugs
 
-If you find a bug, please [**open an issue**](https://github.com/saetass/saetass/issues/new) and include:
-
-- A clear and descriptive title
-- Steps to reproduce the behavior
-- Expected versus actual results
-- Your Python version and OS
-- The version of SAETASS and its dependencies (`pip list`)
-- If applicable, a minimal code snippet that reproduces the issue
+If you find a bug, please [**open a bug report**](https://github.com/saetass/saetass/issues/new/choose). Its form asks for a minimal example that reproduces the problem, the error message and the versions of SAETASS, Python and your operating system.
 
 ### Suggesting features
 
-Feature requests **are welcome**! When suggesting a new feature:
-
-- Describe the **problem** your feature would solve
-- Explain the **proposed solution** and any alternatives you've considered
-- Indicate whether you'd be willing to implement it yourself
+Feature requests **are welcome**! [**Open a feature request**](https://github.com/saetass/saetass/issues/new/choose) describing the **problem** your feature would solve, the **proposed solution** and any alternatives you've considered, and whether you'd be willing to implement it yourself. Problems in the documentation, tutorials or examples have their own form.
 
 ### Contributing code
 
@@ -113,13 +103,23 @@ Minimum versions are not raised just because newer releases exist. A minimum is 
 2. **Write descriptive commit messages**: Use clear and concise commit messages.
 3. **Keep PRs focused**: One feature or fix per pull request. Large changes should be discussed in an issue first.
 4. **Update documentation**: If your change adds or modifies public API, update the relevant docstrings and Sphinx `.rst` files.
-5. **Reference related issues**: Link to any relevant issues in your PR description (e.g., `Fixes #42`).
+5. **Reference related issues**: Link to any relevant issues in your PR description (e.g., `Closes #42`), so they are closed when it is merged.
+6. **Update the changelog**: Describe every change that users will notice in a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md), in the section that fits (Added, Changed, Deprecated, Removed or Fixed), and mark changes that require users to modify their scripts as **Breaking**. A check fails on pull requests that change `src/` or `pyproject.toml` without a new entry; a maintainer adds the `no changelog` label when users will not notice the change, such as a refactor or a change to the tests.
 
 After submitting:
 
 - A maintainer will review your PR and may request changes
 - Once approved, your contribution will be merged into `main`
 - You will be credited in the project. Thank you!!
+
+## Releasing
+
+Maintainers publish a release in these steps:
+
+1. In [`CHANGELOG.md`](CHANGELOG.md), rename `## [Unreleased]` to the new version and its date, `## [X.Y.Z] - YYYY-MM-DD`, add an empty `## [Unreleased]` above it, and update the comparison links at the end of the file: `[Unreleased]` compares the new tag with `HEAD`, and a new `[X.Y.Z]` link compares the previous tag with the new one.
+2. Merge that change into `main`.
+3. [Draft a release](https://github.com/saetass/saetass/releases/new) with a new tag `vX.Y.Z` on `main`, and paste the section of the changelog as its notes, with a summary on top if it helps.
+4. Publishing the release uploads the package to PyPI and archives it in Zenodo under the DOI of all versions. The version of the package comes from the tag, so no file needs a version number.
 
 ## Thank you!
 
