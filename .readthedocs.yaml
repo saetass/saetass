@@ -4,6 +4,11 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  jobs:
+    # Read the Docs clones without the full history and tags, from which hatch-vcs
+    # takes the version that the documentation shows
+    post_checkout:
+      - git fetch --unshallow --tags || true
 
 python:
   install:
