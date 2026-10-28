@@ -14,9 +14,7 @@ authors:
     orcid: "https://orcid.org/0000-0002-3882-9477"
     affiliation: "Instituto de Astrofísica de Andalucía (IAA-CSIC)"
 title: "SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Symmetry"
-version: 0.1.0-placeholder
 doi: 10.5281/zenodo.19468484
-date-released: 2026-04-08
 url: "https://saetass.readthedocs.io/"
 repository-code: "https://github.com/saetass/saetass"
 keywords:
@@ -28,3 +26,24 @@ keywords:
   - numerical-simulation
   - astrophysics
 license: "BSD-3-Clause"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "García-Morillo"
+      given-names: "José María"
+      orcid: "https://orcid.org/0009-0008-5232-349X"
+    - family-names: "Menchiari"
+      given-names: "Stefano"
+      orcid: "https://orcid.org/0009-0006-6386-3702"
+    - family-names: "López-Coto"
+      given-names: "Rubén"
+      orcid: "https://orcid.org/0000-0002-3882-9477"
+  title: "SAETASS: Solver for Astroparticle Equation of Transport Analysis in Spherical Symmetry"
+  journal: "Journal of Cosmology and Astroparticle Physics"
+  year: 2026
+  month: 9
+  volume: 2026
+  issue: "09"
+  start: 133
+  doi: "10.1088/1475-7516/2026/09/133"
+  url: "https://doi.org/10.1088/1475-7516/2026/09/133"

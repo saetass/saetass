@@ -27,12 +27,13 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - The inflow of the loss operator defaults to zero.
 - Advection from `r = 0` needs at least three radial cells, and `DiffusionSolver` rejects unknown boundary conditions and parameters of the wrong shape.
 - The documentation shows the version of the installed package instead of a fixed 0.1.0.
+- The "Cite this repository" box of GitHub proposes the technical paper, as the README does.
 
 ### Removed
 
 - **Breaking:** `DiagnosticsWarning`. The warnings of `solver.diagnostics()` are logged, and remain available in `SimulationDiagnostics.warnings`.
 - **Breaking:** `setup_rich_logging`, replaced by `saetass.cli.set_log_level` and `saetass.cli.set_rich_logging`.
-- The placeholder version of `CITATION.cff`: citations use the Zenodo DOI of all versions.
+- The placeholder version and release date of `CITATION.cff`, which went stale with every release: the citation uses the Zenodo DOI of all versions.
 
 ### Fixed
 
