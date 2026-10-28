@@ -306,6 +306,7 @@ class TestBanner:
             height=height,
             force_terminal=terminal,
             color_system=None,
+            legacy_windows=False,
         )
         BannerManager().reset()
         print_banner(console=console)
