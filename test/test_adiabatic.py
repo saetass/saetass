@@ -230,3 +230,53 @@ class TestAdiabaticLosses:
         )
         with pytest.raises(ValueError, match="radial axis"):
             _run_losses(state_1d, params)
+
+
+class TestAdvectionWithAdiabaticLosses:
+    @staticmethod
+    def _homologous_transport(alpha, give_velocity_to_losses):
+        """Advection and adiabatic losses in v = alpha r, from a shell with a Gaussian spectrum."""
+        r = np.linspace(0.0, 4.0, 161)
+        p = np.logspace(0.0, 3.0, 61)
+        grid = Grid(
+            r_centers=r * su.LENGTH,
+            p_centers=p * su.MOMENTUM,
+            t_grid=np.linspace(0.0, 0.5, 51) * su.TIME,
+        )
+
+        def f_initial(r, p):
+            return np.exp(-(((r - 1.5) / 0.3) ** 2)) * _gaussian_in_log_p(p) / p**2
+
+        psi = p[:, None] ** 2 * f_initial(r[None, :], p[:, None])
+        v = alpha * r * su.VELOCITY
+        loss = {"adiabatic_losses": True}
+        if give_velocity_to_losses:
+            loss["v_centers_physical"] = v
+        solver = Solver(
+            state=State(psi_p=psi * su.PSI_P, grid=grid, particle=Particle.PROTON),
+            problem_type="advection-loss",
+            operator_params={
+                "advection": {
+                    "v_centers": v,
+                    "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+                },
+                "loss": loss,
+            },
+        )
+        # Liouville: f is constant along r = r_0 e^(alpha t), p = p_0 e^(-alpha t)
+        t = 0.5
+        exact = p[:, None] ** 2 * f_initial(
+            r[None, :] * np.exp(-alpha * t), p[:, None] * np.exp(alpha * t)
+        )
+        return solver.run().psi_p.to_value(su.PSI_P), exact
+
+    @pytest.mark.parametrize("alpha", [0.6, -0.6], ids=["expansion", "compression"])
+    def test_parker_equation_in_a_homologous_flow(self, alpha):
+        psi, exact = self._homologous_transport(alpha, give_velocity_to_losses=False)
+        error = np.linalg.norm(psi - exact) / np.linalg.norm(exact)
+        assert error < 0.04, error
+
+    def test_losses_take_the_velocity_of_the_advection(self):
+        implicit, _ = self._homologous_transport(0.6, give_velocity_to_losses=False)
+        explicit, _ = self._homologous_transport(0.6, give_velocity_to_losses=True)
+        np.testing.assert_array_equal(implicit, explicit)

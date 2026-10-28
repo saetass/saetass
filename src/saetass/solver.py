@@ -402,7 +402,7 @@ class Solver:
         for op in self.operator_list:
             solver_class = op.solver_class
             op_params = solver_class.convert_params(
-                self.operator_params.get(op.value, {}), self.grid
+                self._operator_params_of(op), self.grid
             )
 
             self.operator_subsolvers.append(
@@ -422,6 +422,25 @@ class Solver:
                         key,
                         _describe_parameter(value, solver_class.PARAM_SPECS[key].unit),
                     )
+
+    def _operator_params_of(self, op: OperatorType) -> dict:
+        """
+        Parameters given by the user for the operator ``op``.
+
+        The adiabatic losses take the velocity of the advection operator when they are given none, so that both operators see the same flow.
+        """
+        params = self.operator_params.get(op.value, {})
+        advection = self.operator_params.get(OperatorType.ADVECTION.value, {})
+        if (
+            op is OperatorType.LOSS
+            and params.get("adiabatic_losses", False)
+            and "v_centers_physical" not in params
+            and OperatorType.ADVECTION in self.operator_list
+            and "v_centers" in advection
+        ):
+            logger.debug("Adiabatic losses use the velocity of the advection operator")
+            params = {**params, "v_centers_physical": advection["v_centers"]}
+        return params
 
     def _advance(self, n_steps):
         """Advance the solution by n_steps using operator splitting."""
