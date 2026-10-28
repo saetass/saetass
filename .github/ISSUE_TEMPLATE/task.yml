@@ -1,0 +1,17 @@
+name: Task
+description: Planned maintenance work, such as a refactor, a CI change or a release.
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be done and why.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: A checklist of the work, if it has several parts.
+      value: |
+        - [ ]
