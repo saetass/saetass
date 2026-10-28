@@ -49,6 +49,18 @@ html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_show_sourcelink = False
 html_theme_options = {
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/saetass/saetass",
+            "icon": "fab fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/saetass/",
+            "icon": "fab fa-python",
+        },
+    ],
     "footer_end": ["changelog-link", "theme-version"],
 }
 autodoc_member_order = "bysource"
