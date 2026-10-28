@@ -10,6 +10,18 @@ Its level, ``INFO`` by default, is set with :py:func:`set_log_level` or the envi
 ``INFO`` reports what each simulation does (operators, grid, time steps, duration), ``DEBUG`` adds the details of every operator, the threads of the kernels and the sub-cycles of each step.
 To handle the messages with your own logging configuration instead, call ``set_rich_logging(False)``.
 
+.. tip::
+
+    For more detail, for instance to follow the CFL sub-cycles of a slow simulation, or for warnings only:
+
+    .. code-block:: python
+
+        from saetass.cli import set_log_level
+
+        set_log_level("DEBUG")  # or "WARNING"
+
+    or ``export SAETASS_LOG_LEVEL=DEBUG`` in the shell, before starting Python.
+
 Banner and progress bar
 -----------------------
 
@@ -21,6 +33,20 @@ They can be turned off, in order of precedence:
 
 Without any of them, they are shown in the main process and hidden in child processes, such as the workers of :py:mod:`multiprocessing` or :py:func:`saetass.sweep.run_sweep`: the live progress bars of simulations running side by side would overwrite each other on the same terminal.
 Log messages are not affected.
+
+.. note::
+
+    Some terminals, notebook front ends and log files do not render the banner and the progress bar well. If they look garbled, hide them:
+
+    .. code-block:: python
+
+        solver = Solver(state, "diffusion", operator_params, quiet=True)  # one simulation
+
+        from saetass.cli import set_quiet
+
+        set_quiet(True)  # every simulation of this process
+
+    or ``export SAETASS_QUIET=1`` in the shell, for every simulation started from it.
 """
 
 import logging

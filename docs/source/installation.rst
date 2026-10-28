@@ -232,49 +232,9 @@ Scientific software evolves to incorporate more efficient algorithms and stabili
 Troubleshooting
 ---------------
 
-Module not found
-~~~~~~~~~~~~~~~~
-
 If you encounter a ``ModuleNotFoundError`` despite a successful installation, check the following:
 
 1. **Interpreter mismatch:** Ensure that the command `which python` (Linux/macOS) or `where python` (Windows) points to the interpreter inside your virtual environment.
 2. **Path conflicts:** Ensure the environment variable ``PYTHONPATH`` is not being overridden by your `.bashrc` or `.zshrc`, as this can force Python to look for libraries in the wrong locations.
-
-Garbled banner or progress bar
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Every :py:class:`~saetass.solver.Solver` prints a banner and a live progress bar with `Rich <https://rich.readthedocs.io>`_.
-Some terminals, notebook front ends and log files do not render them well, and the progress bars of simulations running at the same time in several processes overwrite each other.
-Child processes, such as the workers of :py:func:`saetass.sweep.run_sweep`, hide them by default. To turn them off elsewhere, use any of:
-
-.. code-block:: python
-
-   solver = Solver(state, "diffusion", operator_params, quiet=True)  # one simulation
-
-   from saetass.cli import set_quiet
-   set_quiet(True)  # every simulation of this process
-
-.. code-block:: bash
-
-   export SAETASS_QUIET=1  # every simulation started from this shell
-
-``SAETASS_QUIET=0`` or ``set_quiet(False)`` turn them back on, for instance in a worker process.
-
-Log messages
-~~~~~~~~~~~~
-
-SAETASS prints its log messages on the same Rich console, at the ``INFO`` level by default: a summary of each simulation when it is created and its duration when it finishes.
-For more detail (every operator, the CFL sub-cycles of each step, the threads of the kernels), or for warnings only:
-
-.. code-block:: python
-
-   from saetass.cli import set_log_level
-   set_log_level("DEBUG")  # or "WARNING"
-
-.. code-block:: bash
-
-   export SAETASS_LOG_LEVEL=DEBUG  # read when SAETASS is imported
-
-To handle them with your own logging configuration instead, call ``saetass.cli.set_rich_logging(False)``: they then go to the root logger (see :py:mod:`saetass.cli.output`).
 
 For further assistance, please refer to the GitHub issues page or contact the maintainer directly.
