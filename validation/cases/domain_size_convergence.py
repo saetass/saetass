@@ -114,7 +114,6 @@ def run_convergence_sim(factor, base_points=400, E_k=10 * u.GeV):
     }
 
     solver = Solver(
-        grid=grid,
         state=State(psi_p=psi_values * su.PSI_P, grid=grid, particle=Particle.PROTON),
         problem_type="advection-source-diffusion",
         operator_params=op_params,

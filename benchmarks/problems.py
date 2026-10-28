@@ -93,7 +93,6 @@ def _make_solver(
     )
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=particle)
     return Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=operator_params,
@@ -119,7 +118,8 @@ def _time_factor(function):
 
 
 def _hyperbolic_options(order: int = 2, limiter: str = "minmod") -> dict:
-    return {"order": order, "limiter": limiter, "cfl": 0.8}
+    # Only the second-order scheme takes a limiter
+    return {"order": order, "cfl": 0.8, **({"limiter": limiter} if order == 2 else {})}
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +391,8 @@ def operator_case(operator: str, shape: tuple[int, ...], **options) -> OperatorC
     for key in ("order", "limiter"):
         if key in options:
             params[key] = options.pop(key)
+    if params.get("order") == 1:
+        params.pop("limiter", None)
     if options:
         raise TypeError(f"Unexpected options {sorted(options)}")
 
@@ -484,7 +486,7 @@ def _electron_loss_columns(
         )
 
     sync = calculator(n_gas)
-    sync.compute_sychrotron_losses(B_field=B)
+    sync.compute_synchrotron_losses(B_field=B)
 
     calc = calculator(n_gas)
     dn = photon_number_density()

@@ -15,6 +15,7 @@ import astropy.units as u
 import numpy as np
 
 from . import units as su
+from .cli.output import plural
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,41 @@ class Grid:
             self.p_centers = self._p_to_y(self.p_centers)
             if self.p_faces is not None:
                 self.p_faces = self._p_to_y(self.p_faces)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Created grid: %s", self.summary())
+
+    def summary(self) -> str:
+        """
+        One-line description of the cells (the range of their centers) and time steps of the grid, in canonical units.
+
+        Returns
+        -------
+        str
+            For instance ``"71 r cells in [0, 10] pc, 400 log-spaced p cells in [1, 1e+06] GeV_c, 400 time steps in [0, 1] Myr"``.
+        """
+        parts = []
+        if self.r_centers is not None:
+            r = self.r_centers.to_value(su.LENGTH)
+            parts.append(
+                f"{plural(self.num_cells_r, 'r cell')} in [{r[0]:.4g}, {r[-1]:.4g}] "
+                f"{su.LENGTH}"
+            )
+        if self.p_centers is not None:
+            p = self.p_centers_phys.to_value(su.MOMENTUM)
+            spacing = "log-spaced " if self.is_log_p else ""
+            parts.append(
+                f"{plural(self.num_cells_p, spacing + 'p cell')} "
+                f"in [{p[0]:.4g}, {p[-1]:.4g}] "
+                f"{su.MOMENTUM}"
+            )
+        if self.t_grid is not None:
+            t = self.t_grid.to_value(su.TIME)
+            parts.append(
+                f"{plural(self.num_timesteps, 'time step')} "
+                f"in [{t[0]:.4g}, {t[-1]:.4g}] {su.TIME}"
+            )
+        return ", ".join(parts)
 
     def _init_spatial_grid(
         self, r_faces: u.Quantity | None, r_centers: u.Quantity | None

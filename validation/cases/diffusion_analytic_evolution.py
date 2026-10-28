@@ -35,7 +35,6 @@ def run_diffusion_simulation(
     state = State(psi_p=psi_initial * su.PSI_P, grid=grid, particle=Particle.PROTON)
 
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="diffusion",
         operator_params={"diffusion": solver_params},

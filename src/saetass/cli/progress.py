@@ -1,8 +1,6 @@
-import logging
 import sys
 
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -39,23 +37,6 @@ custom_theme = Theme(
 
 width = None if sys.stdout.isatty() else 120
 console = Console(theme=custom_theme, width=width)
-
-
-def setup_rich_logging(level=logging.INFO):
-    """
-    Set up rich logging handler for the root logger.
-
-    Parameters
-    ----------
-    level : int, optional
-        The logging level to set (e.g., logging.INFO, logging.DEBUG).
-    """
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[RichHandler(console=console, rich_tracebacks=True, markup=True)],
-    )
 
 
 class ProgressBarSingleton:

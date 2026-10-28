@@ -36,21 +36,21 @@ class AdvectionSolver(HyperbolicSolver):
 
         v_centers : astropy.units.Quantity or callable
             Advection velocity at cell centers. Units compatible with :py:data:`~saetass.units.VELOCITY`. A callable must have signature ``v_centers(t: Quantity) -> Quantity``. A :py:class:`~saetass.parameters.Separable` is also accepted.
-        limiter : ``{'minmod', 'vanleer', 'mc'}``
-            Slope limiter used for second-order schemes.
-        cfl : float
-            CFL number for the adaptive sub-step calculation.
+        limiter : ``{'minmod', 'vanleer', 'mc'}``, optional
+            Slope limiter of the second-order scheme. Default is ``'minmod'`` for order 2; it must not be given for order 1, which does not limit slopes.
+        cfl : float, optional
+            CFL number for the adaptive sub-step calculation. Default is ``0.5``.
         inflow_value_U : astropy.units.Quantity
             Value of the conservative variable :math:`U = r^2 \psi` at the outer boundary when the flow is directed inward (inflow condition). Units compatible with :py:data:`~saetass.units.AREA` times :py:data:`~saetass.units.PSI_P`.
-        order : ``{1, 2}``
-            Order of the numerical scheme.
+        order : ``{1, 2}``, optional
+            Order of the numerical scheme: 1 for first-order upwind, 2 for second-order MUSCL-Hancock. Default is ``2``.
     """
 
     PARAM_SPECS = MappingProxyType(
         {
             **HyperbolicSolver.PARAM_SPECS,
-            "v_centers": ParamSpec(su.VELOCITY, dynamic=True),
-            "inflow_value_U": ParamSpec(su.AREA * su.PSI_P),
+            "v_centers": ParamSpec(su.VELOCITY, dynamic=True, required=True),
+            "inflow_value_U": ParamSpec(su.AREA * su.PSI_P, required=True),
         }
     )
 

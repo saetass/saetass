@@ -93,7 +93,7 @@ def test_subsolvers_reject_quantities():
         )
 
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         AdvectionSolver(
             grid,
@@ -109,7 +109,7 @@ def test_subsolvers_reject_quantities():
 
     # 3. DiffusionSolver rejects Quantity in params
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         DiffusionSolver(
             grid,
@@ -119,7 +119,7 @@ def test_subsolvers_reject_quantities():
 
     # 4. SourceSolver rejects Quantity in params
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         SourceSolver(
             grid,
@@ -133,7 +133,7 @@ def test_subsolvers_reject_quantities():
         t_grid=grid.t_grid,
     )
     with pytest.raises(
-        TypeError, match="parameter '\w+' must be a bare number or array"
+        TypeError, match=r"parameter '\w+' must be a bare number or array"
     ):
         LossSolver(
             grid_p,
@@ -164,7 +164,14 @@ class TestSolverParameterConversion:
 
         grid = self._grid_2d()
         out = AdvectionSolver.convert_params(
-            {"v_centers": np.ones((11, 5)) * u.km / u.s, "cfl": 0.5}, grid
+            {
+                "v_centers": np.ones((11, 5)) * u.km / u.s,
+                "cfl": 0.5,
+                "limiter": "minmod",
+                "order": 2,
+                "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+            },
+            grid,
         )
         expected = (1.0 * u.km / u.s).to_value(su.VELOCITY)
         np.testing.assert_allclose(out["v_centers"], expected)
@@ -178,6 +185,25 @@ class TestSolverParameterConversion:
             ValueError, match=r"Unknown DiffusionSolver parameter\(s\) \['f_end'\]"
         ):
             DiffusionSolver.convert_params({"f_end": 0.0 * su.PSI_P}, self._grid_2d())
+
+    @pytest.mark.parametrize(
+        "operator, missing",
+        [
+            ("advection", ["inflow_value_U", "v_centers"]),
+            ("loss", ["P_dot"]),
+            ("diffusion", ["D_values"]),
+            ("source", ["source"]),
+        ],
+    )
+    def test_missing_required_parameters_rejected(self, operator, missing):
+        from saetass.solver import OperatorType
+
+        solver_class = OperatorType(operator).solver_class
+        with pytest.raises(ValueError) as excinfo:
+            solver_class.convert_params({}, self._grid_2d())
+        assert str(excinfo.value) == (
+            f"Missing required {solver_class.__name__} parameter(s) {missing}."
+        )
 
     def test_physical_parameter_without_units_rejected(self):
         from saetass.solvers.loss_solver import LossSolver
@@ -287,7 +313,7 @@ class TestUtilityInputs:
             particle="electron",
         )
         with pytest.raises(TypeError):
-            calc.compute_sychrotron_losses(B_field=np.full(5, 10.0))
+            calc.compute_synchrotron_losses(B_field=np.full(5, 10.0))
         with pytest.raises(u.UnitsError):
             calc.compute_inverse_compton_losses(
                 eps_grid=np.logspace(-4, 1, 20) * u.eV,

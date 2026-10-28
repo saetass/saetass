@@ -13,7 +13,7 @@ import astropy.units as u
 import numpy as np
 import pytest
 
-from saetass import Grid, Particle, Solver, State
+from saetass import Grid, Particle, Solver, State, TimeFactor
 from saetass import units as su
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ def _make_loss_grid_and_solver(
 
     loss_params = {
         "P_dot": P_dot,
-        "limiter": "minmod",
+        **({"limiter": "minmod"} if order == 2 else {}),
         "cfl": cfl,
         "inflow_value_U": np.zeros(1) * su.MOMENTUM * su.PSI_P,
         "order": order,
@@ -50,7 +50,6 @@ def _make_loss_grid_and_solver(
     grid = Grid(p_centers=p_centers, t_grid=t_grid)
     state = State(psi_p=init_f, grid=grid, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="loss",
         operator_params={"loss": loss_params},
@@ -82,7 +81,7 @@ def _setup_loss_solver(
 
     loss_params = {
         "P_dot": p_dot_in,
-        "limiter": "minmod",
+        **({"limiter": "minmod"} if order == 2 else {}),
         "cfl": cfl,
         "inflow_value_U": np.zeros(1) * su.MOMENTUM * su.PSI_P,
         "order": order,
@@ -92,7 +91,6 @@ def _setup_loss_solver(
     grid = Grid(p_centers=p_c, t_grid=t_g)
     state = State(psi_p=init_f, grid=grid, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="loss",
         operator_params={"loss": loss_params},
@@ -324,6 +322,8 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
+            "cfl": 0.5,
+            "order": 1,
             "adiabatic_losses": True,
             **extra,
         }
@@ -332,7 +332,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         with pytest.raises(NotImplementedError, match="Adiabatic losses"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
@@ -352,14 +351,12 @@ class TestLossSolverExceptionsAndEdges:
         params = {
             "P_dot": p_dot_func,
             "adiabatic_losses": False,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
         }
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="loss",
             operator_params={"loss": params},
@@ -376,14 +373,12 @@ class TestLossSolverExceptionsAndEdges:
         params = {
             "P_dot": np.array([-1.0, -1.0]) * su.MOMENTUM_LOSS_RATE,
             "adiabatic_losses": False,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
         }
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         solver = Solver(
-            grid=grid,
             state=state,
             problem_type="loss",
             operator_params={"loss": params},
@@ -413,7 +408,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.array([-1.0, -1.0]) * su.MOMENTUM_LOSS_RATE,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -421,7 +415,6 @@ class TestLossSolverExceptionsAndEdges:
         state = State(psi_p=np.ones(2) * su.PSI_P, grid=grid, particle=Particle.PROTON)
         with pytest.raises(ValueError, match="strictly positive momentum"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
@@ -435,7 +428,6 @@ class TestLossSolverExceptionsAndEdges:
         )
         params = {
             "P_dot": np.full(10, -1.0) * su.MOMENTUM_LOSS_RATE,
-            "limiter": "minmod",
             "order": 1,
             "cfl": 0.5,
             "inflow_value_psi": 0.0 * su.PSI_P,
@@ -446,17 +438,41 @@ class TestLossSolverExceptionsAndEdges:
             ValueError, match="either inflow_value_psi or inflow_value_U"
         ):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="loss",
                 operator_params={"loss": params},
                 substeps={"loss": 1},
             )
 
+    def test_inflow_defaults_to_zero(self):
+        """Gains without an inflow value let nothing enter through the last face."""
+        grid = Grid(
+            p_centers=np.logspace(0, 2, 10) * su.MOMENTUM,
+            t_grid=np.linspace(0.0, 0.5, 6) * su.TIME,
+        )
+        params = {
+            "P_dot": np.full(10, 1.0) * su.MOMENTUM_LOSS_RATE,
+            "limiter": "minmod",
+            "order": 2,
+            "cfl": 0.5,
+        }
+
+        def run(extra):
+            state = State(psi_p=np.ones(10) * su.PSI_P, grid=grid)
+            solver = Solver(
+                state=state,
+                problem_type="loss",
+                operator_params={"loss": {**params, **extra}},
+            )
+            return solver.run().psi_p.to_value(su.PSI_P)
+
+        np.testing.assert_array_equal(
+            run({}), run({"inflow_value_psi": 0.0 * su.PSI_P})
+        )
+
 
 class TestLossSolver2D:
     params = {
-        "limiter": "minmod",
         "order": 1,
         "cfl": 0.5,
         "inflow_value_psi": 0.0 * su.PSI_P,
@@ -469,7 +485,6 @@ class TestLossSolver2D:
         )
         with pytest.raises(ValueError, match="requires a Grid with a momentum axis"):
             Solver(
-                grid=grid,
                 state=State(psi_p=np.ones(5) * su.PSI_P, grid=grid),
                 problem_type="loss",
                 operator_params={
@@ -490,7 +505,6 @@ class TestLossSolver2D:
             r_centers=np.array([1.0, 2.0, 3.0]) * su.LENGTH, p_centers=p, t_grid=t_grid
         )
         solver_2d = Solver(
-            grid=grid_2d,
             state=State(psi_p=np.outer(profile, amplitudes) * su.PSI_P, grid=grid_2d),
             problem_type="loss",
             operator_params={
@@ -505,7 +519,6 @@ class TestLossSolver2D:
         for j, amplitude in enumerate(amplitudes):
             grid_1d = Grid(p_centers=p, t_grid=t_grid)
             solver_1d = Solver(
-                grid=grid_1d,
                 state=State(psi_p=amplitude * profile * su.PSI_P, grid=grid_1d),
                 problem_type="loss",
                 operator_params={
@@ -515,3 +528,33 @@ class TestLossSolver2D:
             np.testing.assert_allclose(
                 psi_2d[:, j], solver_1d.run().psi_p.to_value(su.PSI_P), rtol=1e-12
             )
+
+    @pytest.mark.parametrize("kind", ["static", "callable", "separable"])
+    def test_cfl_step_includes_the_last_momentum_of_every_radius(self, kind):
+        """The last momentum of each radius bounds the CFL step, as the outer face."""
+        p = np.logspace(0, 2, 20) * su.MOMENTUM
+        t_grid = np.array([0.0, 0.2]) * su.TIME
+        P_dot = np.tile(-0.3 * p.to_value(su.MOMENTUM)[:, None], (1, 3))
+        P_dot[-1, 0] *= 20.0  # the last momentum loses fastest at the first radius
+        rate = P_dot * su.MOMENTUM_LOSS_RATE
+        if kind == "callable":
+            rate_2d = lambda t: P_dot * su.MOMENTUM_LOSS_RATE  # noqa: E731
+        elif kind == "separable":
+            rate_2d = rate * TimeFactor(lambda t: 1.0)
+        else:
+            rate_2d = rate
+
+        def subcycles(grid, P):
+            solver = Solver(
+                state=State(psi_p=np.ones(grid.shape) * su.PSI_P, grid=grid),
+                problem_type="loss",
+                operator_params={"loss": {**self.params, "P_dot": P}},
+            )
+            solver.run()
+            return solver.operator_subsolvers[0]._cfl_subcycles
+
+        grid_2d = Grid(
+            r_centers=np.array([1.0, 2.0, 3.0]) * su.LENGTH, p_centers=p, t_grid=t_grid
+        )
+        grid_1d = Grid(p_centers=p, t_grid=t_grid)
+        assert subcycles(grid_2d, rate_2d) == subcycles(grid_1d, rate[:, 0])

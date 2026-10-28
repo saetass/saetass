@@ -42,7 +42,6 @@ def run_advection_test(grid_params, solver_params, initial_f):
 
     # Create solver
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="advection",
         operator_params={"advection": solver_params},
@@ -245,16 +244,24 @@ class TestAdvectionSolverExceptionsAndEdges:
         state = State(
             psi_p=np.ones((2,)) * su.PSI_P, grid=grid, particle=Particle.PROTON
         )
-        # missing cfl
-        params = {
-            "v_centers": np.array([[1.0, 1.0]]) * su.VELOCITY,
-            "limiter": "minmod",
-            "order": 1,
-            "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
-        }
-        with pytest.raises(ValueError, match="cfl must be"):
+        # missing inflow value
+        params = {"v_centers": np.array([[1.0, 1.0]]) * su.VELOCITY}
+        with pytest.raises(
+            ValueError,
+            match=r"Missing required AdvectionSolver parameter\(s\) \['inflow_value_U'\]",
+        ):
             Solver(
-                grid=grid,
+                state=state,
+                problem_type="advection",
+                operator_params={"advection": params},
+                substeps={"advection": 1},
+            )
+
+        # a limiter for the first-order scheme, which does not limit slopes
+        params["inflow_value_U"] = 0.0 * su.AREA * su.PSI_P
+        params.update(order=1, limiter="minmod")
+        with pytest.raises(ValueError, match="only applies to order 2"):
+            Solver(
                 state=state,
                 problem_type="advection",
                 operator_params={"advection": params},
@@ -262,16 +269,48 @@ class TestAdvectionSolverExceptionsAndEdges:
             )
 
         # invalid limiter
-        params["cfl"] = 0.5
+        params["order"] = 2
         params["limiter"] = "invalid_limiter"
         with pytest.raises(ValueError, match="limiter must be"):
             Solver(
-                grid=grid,
                 state=state,
                 problem_type="advection",
                 operator_params={"advection": params},
                 substeps={"advection": 1},
             )
+
+    @pytest.mark.parametrize(
+        "given, expected",
+        [
+            ({}, {"order": 2, "limiter": "minmod", "cfl": 0.5}),
+            ({"order": 1}, {"order": 1, "limiter": None, "cfl": 0.5}),
+            ({"limiter": "mc", "cfl": 0.8}, {"order": 2, "limiter": "mc", "cfl": 0.8}),
+        ],
+        ids=["defaults", "first_order", "given"],
+    )
+    def test_scheme_defaults(self, given, expected):
+        grid = Grid(
+            r_centers=np.linspace(0.0, 1.0, 5) * su.LENGTH,
+            t_grid=np.array([0.0, 1.0]) * su.TIME,
+        )
+        params = {
+            "v_centers": np.ones(5) * su.VELOCITY,
+            "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+            **given,
+        }
+        solver = Solver(
+            state=State(psi_p=np.ones(5) * su.PSI_P, grid=grid),
+            problem_type="advection",
+            operator_params={"advection": params},
+            quiet=True,
+        )
+        advection = solver.operator_subsolvers[0]
+        assert {
+            "order": advection.order,
+            "limiter": advection.limiter,
+            "cfl": advection.cfl,
+        } == expected
+        solver.run()
 
     def test_other_limiters(self):
         grid = Grid(
@@ -292,7 +331,6 @@ class TestAdvectionSolverExceptionsAndEdges:
                 "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
             }
             solver = Solver(
-                grid=grid,
                 state=state.clone(),
                 problem_type="advection",
                 operator_params={"advection": params},

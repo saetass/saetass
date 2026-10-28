@@ -21,7 +21,7 @@ def _diffuse(D):
         "diffusion": {"D_values": np.full(r.size, D) * su.DIFFUSION_COEFFICIENT},
         "source": {"source": np.exp(-((r / 0.2) ** 2)) * su.SOURCE_PSI_P},
     }
-    solver = Solver(grid, state, "diffusion-source", params)
+    solver = Solver(state, "diffusion-source", params)
     return solver.run().psi_p.to_value(su.PSI_P)
 
 

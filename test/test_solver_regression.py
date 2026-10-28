@@ -31,7 +31,8 @@ R_2D, P_2D = np.linspace(0.0, 1.0, 24), np.logspace(0.0, 4.0, 12)
 
 
 def _hyperbolic(order=2, limiter="minmod"):
-    return {"order": order, "limiter": limiter, "cfl": 0.8}
+    # Only the second-order scheme takes a limiter
+    return {"order": order, "cfl": 0.8, **({"limiter": limiter} if order == 2 else {})}
 
 
 def _wave(t):
@@ -47,7 +48,6 @@ def _run(problem_type, params, psi, r=None, p=None, dt=1e-3, scheme="strang"):
     )
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=Particle.PROTON)
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=params,
@@ -220,14 +220,15 @@ def test_matches_golden_output(case, update_golden):
     )
 
 
-def test_debug_logging_does_not_change_the_result(caplog):
+def test_debug_logging_does_not_change_the_result(saetass_caplog):
     """The debug messages computed only when enabled report without side effects."""
+    caplog = saetass_caplog
     with caplog.at_level(logging.DEBUG, logger="saetass"):
         result = CASES["full_2d_strang"]()
     messages = caplog.text
     assert "max(|values|) after step" in messages
     assert "Advance finished" in messages
-    assert "Strang splitting: full step for operator 'diffusion'" in messages
+    assert "SourceSolver: advanced by 1 step" in messages
 
     with np.load(GOLDEN_PATH) as golden:
         expected = golden["full_2d_strang"]

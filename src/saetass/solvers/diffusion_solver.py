@@ -4,6 +4,7 @@ from types import MappingProxyType
 import numpy as np
 
 from .. import units as su
+from ..cli.output import plural
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..parallel import reset_team, threads_for
@@ -57,7 +58,9 @@ class DiffusionSolver(SubSolver):
 
     PARAM_SPECS = MappingProxyType(
         {
-            "D_values": ParamSpec(su.DIFFUSION_COEFFICIENT, dynamic=True),
+            "D_values": ParamSpec(
+                su.DIFFUSION_COEFFICIENT, dynamic=True, required=True
+            ),
             "psi_end": ParamSpec(su.PSI_P, dynamic=True),
             "boundary_condition": ParamSpec(),
         }
@@ -81,6 +84,24 @@ class DiffusionSolver(SubSolver):
         self._unpack_params()
         self._init_buffers()
 
+        if logger.isEnabledFor(logging.DEBUG):
+            fourier = self.characteristic_scales(self.t_grid[0], self._dt).numbers[
+                "fourier_number"
+            ]
+            logger.debug(
+                "DiffusionSolver: %s of %s, %s boundary, %s coefficients, "
+                "time step %.4g %s, Fourier number %.4g at t = %.4g %s",
+                plural(self.n_p, "row"),
+                plural(self.N, "cell"),
+                self.boundary_condition,
+                "time-dependent" if self.is_D_dynamic else "static",
+                self._dt,
+                su.TIME,
+                fourier,
+                self.t_grid[0],
+                su.TIME,
+            )
+
     def _unpack_grid(self, grid):
         self.grid = grid
         if grid.r_centers is None:
@@ -90,11 +111,9 @@ class DiffusionSolver(SubSolver):
         if grid.p_centers is not None:
             self.p_centers = np.asarray(grid.p_centers, dtype=float)
             self.p_faces = np.asarray(grid.p_faces, dtype=float)
-            logger.info(f"Found momentum grid with {len(self.p_centers)} points")
         else:
             self.p_centers = None
             self.p_faces = None
-            logger.info("No momentum grid found, operating in 1D mode")
 
         self.n_p = 1 if self.p_centers is None else len(self.p_centers)
 
@@ -273,7 +292,10 @@ class DiffusionSolver(SubSolver):
         D_left = D_values[:, :-1]
         D_right = D_values[:, 1:]
         num = self.hL_b + self.hR_b
-        den = self.hL_b / D_left + self.hR_b / D_right
+        # A vanishing coefficient gives an infinite denominator and a zero face
+        # coefficient, as in the compiled assembly: it is not an error
+        with np.errstate(divide="ignore"):
+            den = self.hL_b / D_left + self.hR_b / D_right
         den = np.where(den == 0.0, np.finfo(float).tiny, den)
         D_face[:, 1:-1] = num / den
         D_face[:, 0] = D_values[:, 0]

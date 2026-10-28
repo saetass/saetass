@@ -71,7 +71,6 @@ def run_solver_test(grid_params, operator_params, problem_types, initial_f):
     state = State(psi_p=init_f, grid=grid, particle=Particle.PROTON)
 
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_types,
         operator_params=op_params,

@@ -23,6 +23,8 @@ from typing import Literal
 
 import numpy as np
 
+from .. import units as su
+from ..cli.output import plural
 from ..diagnostics import CharacteristicScales
 from ..grid import Grid
 from ..parallel import reset_team, threads_for
@@ -32,6 +34,15 @@ from ..state import State
 from . import hyperbolic_kernels as kernels
 
 logger = logging.getLogger(__name__)
+
+#: Order of the scheme when none is given: second-order MUSCL-Hancock.
+DEFAULT_ORDER = 2
+
+#: Slope limiter of the second-order scheme when none is given.
+DEFAULT_LIMITER = "minmod"
+
+#: CFL number when none is given.
+DEFAULT_CFL = 0.5
 
 #: Fraction of a step below which the remaining time of a CFL sub-cycling loop is rounding residue.
 _TIME_TOLERANCE = 1e-12
@@ -62,18 +73,19 @@ class HyperbolicSolver(SubSolver, ABC):
         V_centers : numpy.ndarray or callable
             Generalized velocities at cell centers. Shape must match
             grid dimensions. A callable must have signature ``V_centers(t: float) -> numpy.ndarray``.
-        limiter : ``{'minmod', 'vanleer', 'mc'}``
-            Slope limiter used for second-order schemes.
-        cfl : float
+        limiter : ``{'minmod', 'vanleer', 'mc'}``, optional
+            Slope limiter of the second-order scheme. Default is ``'minmod'`` for order 2; it must not be given for order 1, which does not limit slopes.
+        cfl : float, optional
             CFL (Courant-Friedrichs-Lewy) number for stable time
-            step calculation.
+            step calculation. Default is ``0.5``.
         inflow_value_U : float or numpy.ndarray
             Value of the conservative variable :math:`U` at the outer boundary
             for inflow conditions.
-        order : ``{1, 2}``
+        order : ``{1, 2}``, optional
             Order of the numerical scheme:
             * 1: First-order upwind.
             * 2: Second-order MUSCL-Hancock.
+            Default is ``2``.
         axis : ``{0, 1}``
             Integer indicating the main axis of the problem:
             * 0: Momentum axis.
@@ -82,7 +94,11 @@ class HyperbolicSolver(SubSolver, ABC):
 
     #: Numerical options shared by all hyperbolic subsolvers (extended by subclasses).
     PARAM_SPECS = MappingProxyType(
-        {"limiter": ParamSpec(), "cfl": ParamSpec(), "order": ParamSpec()}
+        {
+            "limiter": ParamSpec(),
+            "cfl": ParamSpec(),
+            "order": ParamSpec(),
+        }
     )
 
     #: Whether slopes are limited on :math:`U / r^2` instead of :math:`U` (spherical advection).
@@ -115,6 +131,8 @@ class HyperbolicSolver(SubSolver, ABC):
         self._init_kernel_arguments()
         #: CFL sub-cycles performed by the last call to advance().
         self._cfl_subcycles = 0
+        #: CFL sub-cycles performed by every call to advance() so far.
+        self.cfl_subcycles_total = 0
         #: Velocities with a separable time dependence, if any (see :py:mod:`saetass.parameters`).
         self._separable = None
 
@@ -152,6 +170,9 @@ class HyperbolicSolver(SubSolver, ABC):
             self._dt_cfl_static = float(self._compute_dt(V_faces=self.V_faces_static))
             self._V_centers_rows = self._as_rows(self.V_centers, self._rows_shape)
             self._V_faces_rows = self._as_rows(self.V_faces_static, self._faces_shape)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("%s: %s", type(self).__name__, self._describe())
 
     @property
     def _main_centers(self) -> np.ndarray:
@@ -209,7 +230,8 @@ class HyperbolicSolver(SubSolver, ABC):
             U_rows = np.empty(self._rows_shape)
 
         total_time = float(n_steps) * self._dt
-        t_local = state.t_val
+        t_local = t_start = state.t_val
+        previous_subcycles = self._cfl_subcycles
         # Remaining time below this relative tolerance is rounding residue, not a step to take
         time_tolerance = _TIME_TOLERANCE * total_time
         kernel_rows = (values_in, U_rows, values_out)
@@ -306,11 +328,53 @@ class HyperbolicSolver(SubSolver, ABC):
             if self.axis == 0:
                 values_new = values_new.T
         state._update_values(values_new)
+        self.cfl_subcycles_total += self._cfl_subcycles
 
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"max(|values|) after step: {np.max(np.abs(values_new)):.4g}")
+            if self._cfl_subcycles != previous_subcycles:
+                logger.debug(
+                    "%s: %s for %s from t = %.4g %s",
+                    type(self).__name__,
+                    plural(self._cfl_subcycles, "CFL sub-cycle"),
+                    plural(n_steps, "step"),
+                    t_start,
+                    su.TIME,
+                )
+            logger.debug(
+                "%s: max(|values|) after step: %.4g",
+                type(self).__name__,
+                np.max(np.abs(values_new)),
+            )
 
     # ---------------- internal helpers ----------------
+    def _describe(self) -> str:
+        """Scheme, rows and velocities of the operator, for the debug log."""
+        rows = 1 if self.M is None else self.M
+        scheme = (
+            f"order 2, {self.limiter} limiter"
+            if self.order == 2
+            else "order 1 (upwind)"
+        )
+        text = (
+            f"{scheme}, CFL number {self.cfl:g}, "
+            f"{plural(rows, 'row')} of {plural(self.N, 'cell')}, "
+            f"time step {self._dt:.4g} {su.TIME}; "
+        )
+        if self._separable is not None:
+            components = plural(len(self._separable.profiles), "component")
+            return text + f"separable velocities with {components}"
+        if self.is_V_dynamic:
+            return text + "time-dependent velocities"
+        if not np.isfinite(self._dt_cfl_static):
+            return text + "zero velocities"
+        subcycles = max(
+            1, math.ceil(self._dt * (1.0 - _TIME_TOLERANCE) / self._dt_cfl_static)
+        )
+        return text + (
+            f"static velocities, CFL step {self._dt_cfl_static:.4g} {su.TIME}, "
+            f"{plural(subcycles, 'sub-cycle')} per step"
+        )
+
     def _init_kernel_arguments(self) -> None:
         """Arrays and options of the fused kernels that do not change between calls."""
         rows = 1 if self.M is None else self.M
@@ -374,11 +438,14 @@ class HyperbolicSolver(SubSolver, ABC):
             return values.reshape(self._rows_shape)
         return values.T if self.axis == 0 else values
 
-    def _last_center_speed(self, V_centers: np.ndarray) -> float:
-        """Largest speed of the last cells along the active axis, as in :py:meth:`_compute_dt`."""
-        if V_centers.ndim == 1:
-            return float(abs(V_centers[-1]))
-        return float(np.max(np.abs(np.take(V_centers, indices=-1, axis=self.axis))))
+    @staticmethod
+    def _last_center_speed(V_centers: np.ndarray) -> float:
+        """
+        Largest speed of the last cells along the active axis, the proxy of the outer face in the CFL condition.
+
+        Velocities are kept with the active axis last, whatever :py:attr:`axis` is.
+        """
+        return float(np.max(np.abs(V_centers[..., -1])))
 
     def _init_separable(self, V_input: CanonicalSeparable) -> None:
         """Components of separable velocities as kernel rows, at the centers, faces and last cells."""
@@ -399,7 +466,7 @@ class HyperbolicSolver(SubSolver, ABC):
         if components[0].ndim == 1:
             last = [V[-1:] for V in components]
         else:
-            last = [np.take(V, indices=-1, axis=self.axis) for V in components]
+            last = [V[..., -1] for V in components]
         self._separable_last = np.ascontiguousarray(np.stack(last), dtype=float)
         self._separable = V_input
 
@@ -447,7 +514,8 @@ class HyperbolicSolver(SubSolver, ABC):
             self.inflow_value_U,
             steps,
             self.order,
-            kernels.LIMITERS[self.limiter],
+            # Any code for order 1, whose kernels do not limit slopes
+            kernels.LIMITERS[self.limiter or DEFAULT_LIMITER],
             self._left_mode or kernels.LEFT_ZERO_FLUX,
             self._SPHERICAL_SLOPES,
             transform,
@@ -492,15 +560,30 @@ class HyperbolicSolver(SubSolver, ABC):
 
         # Note: V_centers is handled locally in __init__ now due to static/callable checks
 
-        # --- limiter ---
-        limiter = params["limiter"]
-        if limiter not in {"minmod", "vanleer", "mc"}:
-            raise ValueError("limiter must be 'minmod', 'vanleer' or 'mc'")
-        self.limiter: Literal["minmod", "vanleer", "mc"] = limiter
+        # --- order ---
+        order = int(params.get("order", DEFAULT_ORDER))
+        if order not in {1, 2}:
+            raise ValueError("order must be 1 or 2")
+        self.order: Literal[1, 2] = order
+
+        # --- limiter: only the second-order scheme limits slopes ---
+        limiter = params.get("limiter")
+        if self.order == 1:
+            if limiter is not None:
+                raise ValueError(
+                    "The limiter only applies to order 2 (MUSCL-Hancock): remove it "
+                    "for order 1 (upwind)."
+                )
+        else:
+            if limiter is None:
+                limiter = DEFAULT_LIMITER
+            if limiter not in {"minmod", "vanleer", "mc"}:
+                raise ValueError("limiter must be 'minmod', 'vanleer' or 'mc'")
+        self.limiter: Literal["minmod", "vanleer", "mc"] | None = limiter
 
         # --- cfl ---
         try:
-            self.cfl: float = float(params["cfl"])
+            self.cfl: float = float(params.get("cfl", DEFAULT_CFL))
         except Exception:
             raise ValueError("cfl must be a float")
 
@@ -508,12 +591,6 @@ class HyperbolicSolver(SubSolver, ABC):
         self.inflow_value_U = params["inflow_value_U"]
         # convert to 1D plain row array
         self.inflow_value_U = np.asarray(self.inflow_value_U, dtype=float).flatten()
-
-        # --- order ---
-        order = int(params["order"])
-        if order not in {1, 2}:
-            raise ValueError("order must be 1 or 2")
-        self.order: Literal[1, 2] = order
 
     def _unpack_grid(self, grid: Grid):
         """Unpack and validate grid object."""
@@ -529,7 +606,6 @@ class HyperbolicSolver(SubSolver, ABC):
                 faces = np.asarray(faces, dtype=float)
                 setattr(self, f"{name}_centers", centers)
                 setattr(self, f"{name}_faces", faces)
-                logger.info(f"Using {name}-grid with {len(centers)} points")
                 return True
             else:
                 setattr(self, f"{name}_centers", None)
@@ -565,10 +641,8 @@ class HyperbolicSolver(SubSolver, ABC):
 
         other_axis = "p" if main_axis == "r" else "r"
         if _load_axis(other_axis):
-            logger.info(f"Found {other_axis}-grid")
             self.M = len(getattr(self, f"{other_axis}_centers"))
         else:
-            logger.info(f"No {other_axis}-grid found, operating in 1D mode")
             self.M = None
 
     def _face_generalized_velocity_interpolated(
@@ -594,19 +668,14 @@ class HyperbolicSolver(SubSolver, ABC):
         # Linear interpolation: closer center gets higher weight
         return (V_left * dist_right + V_right * dist_left) / denom
 
-    def _compute_dt(
-        self, V_faces: np.ndarray = None, V_centers: np.ndarray = None
-    ) -> float:
+    def _compute_dt(self, V_faces: np.ndarray, V_centers: np.ndarray = None) -> float:
         """
         Compute a stable time step based on the CFL condition:
 
             dt = cfl * min(dx) / max(|V|)
 
-        Works for both 1D and 2D problems depending on `self.axis`.
+        Works for both 1D and 2D problems, with the active axis last in ``V_faces`` and ``V_centers``.
         """
-        # Interpolated velocities at faces along the active axis
-        if V_faces is None:
-            V_faces = self._face_generalized_velocity_interpolated()
         if V_centers is None:
             V_centers = self.V_centers
 
@@ -616,21 +685,11 @@ class HyperbolicSolver(SubSolver, ABC):
         else:
             Vmax = 0.0
 
-        # Include outermost face proxy using last cell center along the active axis
-        # Take max across slices if multidimensional
-        if V_centers.ndim == 1:
-            last_center_vel = abs(V_centers[-1])
-        else:
-            # Take the last index along the active axis, all slices on the other axis
-            last_center_vel = np.max(
-                np.abs(np.take(V_centers, indices=-1, axis=self.axis))
-            )
-
-        Vmax = max(Vmax, float(last_center_vel))
+        # Include the outermost face, using the last cells along the active axis as proxy
+        Vmax = max(Vmax, self._last_center_speed(V_centers))
 
         # If velocity is zero everywhere → infinite dt
         if Vmax <= 0.0:
-            logger.debug("Max velocity is zero, returning infinite dt_cfl")
             return np.inf
 
         dx_min = np.min(self.dx)

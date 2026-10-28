@@ -33,7 +33,6 @@ def run_diffusion_simulation(
         problem_type = "diffusion"
 
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type=problem_type,
         operator_params=operator_params,

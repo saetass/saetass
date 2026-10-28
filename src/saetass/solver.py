@@ -23,11 +23,12 @@ import numpy as np
 
 from . import units as su
 from .cli.banner import print_banner
+from .cli.output import is_quiet, plural
 from .cli.progress import create_progress_bar
 from .diagnostics import CharacteristicScales, SimulationDiagnostics, diagnose
 from .diagnostics import warn as _warn
 from .grid import Grid
-from .parameters import Separable
+from .parameters import CanonicalSeparable, Separable
 from .splitting import create_splitting_scheme
 from .state import State
 
@@ -43,7 +44,7 @@ class ParamSpec:
     Each :py:class:`~saetass.solver.SubSolver` declares its accepted parameters in
     :py:attr:`~saetass.solver.SubSolver.PARAM_SPECS`. :py:class:`~saetass.solver.Solver`
     uses these declarations to convert physical inputs into the bare canonical floats
-    consumed by the numerical kernels, rejecting anything undeclared.
+    consumed by the numerical kernels, rejecting anything undeclared or missing.
 
     Parameters
     ----------
@@ -57,11 +58,14 @@ class ParamSpec:
     coords : bool, optional
         Whether a dynamic callable also receives the physical cell-center coordinates,
         ``fn(r, p, t)``, where ``r`` or ``p`` is ``None`` for 1D grids.
+    required : bool, optional
+        Whether the parameter must always be given. Default is ``False``.
     """
 
     unit: u.UnitBase | None = None
     dynamic: bool = False
     coords: bool = False
+    required: bool = False
 
 
 class SubSolver(ABC):
@@ -119,7 +123,7 @@ class SubSolver(ABC):
         Raises
         ------
         ValueError
-            If a parameter is not declared in :py:attr:`PARAM_SPECS`.
+            If a parameter is not declared in :py:attr:`PARAM_SPECS`, or a required one is missing.
         TypeError
             If a physical parameter lacks units, a non-physical one has them, or a callable is given for a non-dynamic parameter.
         astropy.units.UnitsError
@@ -150,6 +154,16 @@ class SubSolver(ABC):
                 converted[key] = _canonical_callable(value, spec.unit, coords, name)
             else:
                 converted[key] = su.validate_quantity(value, spec.unit, name).value
+
+        missing = [
+            key
+            for key, spec in cls.PARAM_SPECS.items()
+            if spec.required and key not in params
+        ]
+        if missing:
+            raise ValueError(
+                f"Missing required {cls.__name__} parameter(s) {sorted(missing)}."
+            )
         return converted
 
     @classmethod
@@ -220,6 +234,24 @@ def _canonical_callable(
     return numeric
 
 
+def _describe_parameter(value: Any, unit: u.UnitBase | None) -> str:
+    """Short description of a converted parameter for the debug log: its kind, shape and range."""
+    unit_text = "" if unit is None or unit == u.dimensionless_unscaled else f" {unit}"
+    if isinstance(value, CanonicalSeparable):
+        return f"separable, {plural(len(value.profiles), 'component')}{unit_text}"
+    if callable(value):
+        return f"time-dependent callable{unit_text}"
+    array = np.asarray(value)
+    if array.dtype.kind not in "biuf":
+        return repr(value)
+    if array.size == 1:
+        return f"{array.item():.4g}{unit_text}"
+    return (
+        f"array of shape {array.shape} in [{np.min(array):.4g}, {np.max(array):.4g}]"
+        f"{unit_text}"
+    )
+
+
 from .solvers.advection_solver import AdvectionSolver  # noqa: E402
 from .solvers.diffusion_solver import DiffusionSolver  # noqa: E402
 from .solvers.loss_solver import LossSolver  # noqa: E402
@@ -258,7 +290,7 @@ class Solver:
     """
     Main class to manage the simulation workflow. It initializes operators based on the specified problem type and coordinates the time advancement of the solution.
 
-    In the initialization phase, the :py:class:`~saetass.solver.Solver` class takes in the associated :py:class:`~saetass.grid.Grid`, initial :py:class:`~saetass.state.State`, problem type, operator parameters, substep counts and splitting scheme.
+    In the initialization phase, the :py:class:`~saetass.solver.Solver` class takes in the initial :py:class:`~saetass.state.State`, whose :py:class:`~saetass.grid.Grid` defines the cells and the time grid of the simulation, the problem type, operator parameters, substep counts and splitting scheme.
     It parses the problem type to determine which operators are involved and initializes them with their own refined time grids based on the specified splitting type.
 
     Any object of the :py:class:`~saetass.solver.Solver` class exposes two main methods: :py:meth:`~saetass.solver.Solver.step` for advancing the solution by some amount of time steps and :py:meth:`~saetass.solver.Solver.run` for running the entire simulation.
@@ -266,10 +298,8 @@ class Solver:
 
     Parameters
     ----------
-    grid : :py:class:`~saetass.grid.Grid`
-        :py:class:`~saetass.grid.Grid` object containing spatial and momentum grids and time grid.
     state : :py:class:`~saetass.state.State`
-        :py:class:`~saetass.state.State` object containing the initial distribution.
+        :py:class:`~saetass.state.State` object containing the initial distribution. Its :py:class:`~saetass.grid.Grid`, :py:attr:`~saetass.solver.Solver.grid`, provides the spatial and momentum cells and the time grid of the simulation.
     problem_type : str
         String specifying the type of problem and which operators to include. Valid operators are defined in
         :py:class:`~saetass.solver.OperatorType` (e.g., "advection-diffusion-loss-source"). The order of the operators will affect the behaviour of :py:class:`~saetass.splitting.SplittingScheme`.
@@ -283,23 +313,32 @@ class Solver:
     splitting_scheme : str or :py:class:`~saetass.splitting.SplittingSchemeType`, optional
         String or :py:class:`~saetass.splitting.SplittingSchemeType` specifying the :py:class:`~saetass.splitting.SplittingScheme` to use. Valid schemes are defined in
         :py:class:`~saetass.splitting.SplittingSchemeType` (e.g., ``"strang"``, ``"lie"``). Default is ``"strang"``.
+    quiet : bool or None, optional
+        Whether to hide the banner and the progress bar. Default is ``None``, meaning :py:func:`~saetass.cli.output.is_quiet`: shown in the main process and hidden in child processes, unless :py:func:`~saetass.cli.output.set_quiet` or ``SAETASS_QUIET`` say otherwise.
     """
 
     def __init__(
         self,
-        grid: Grid,
         state: State,
         problem_type: str,
         operator_params: dict = None,
         substeps: dict = None,
         splitting_scheme: str = None,
+        quiet: bool | None = None,
         **kwargs,
     ):
-        # Print the banner on initialization
-        print_banner()
+        self.quiet = is_quiet() if quiet is None else bool(quiet)
+        if not self.quiet:
+            print_banner()
 
-        self.grid = grid
+        if not isinstance(state, State):
+            raise TypeError(
+                f"Solver takes the initial State as first argument, not "
+                f"{type(state).__name__}: the Grid of the simulation is that of the State."
+            )
         self.state = state
+        #: :py:class:`~saetass.grid.Grid` of the simulation, that of :py:attr:`state`.
+        self.grid = state.grid
         self.problem_type = problem_type.lower()
 
         # Store operator parameters (nested dict)
@@ -307,8 +346,6 @@ class Solver:
         self.substeps = substeps or {}
 
         # Determine which operators are present and print for debugging
-        logger.debug(f"Problem type: {self.problem_type}")
-        logger.debug(f"Available operators: {[op.value for op in OperatorType]}")
 
         # Parse operators from problem_type, handling exact operator names split by '-'
         self.operator_list = []
@@ -319,7 +356,6 @@ class Solver:
             operator_type = OperatorType(op)
             self.operator_list.append(operator_type)
 
-        logger.debug(f"Using operators: {[op.value for op in self.operator_list]}")
         self.n_os = len(self.operator_list)
 
         if self.n_os == 0:
@@ -336,12 +372,19 @@ class Solver:
         # Initialize splitting scheme
         if splitting_scheme is None:
             splitting_scheme = "strang"
-            logger.info("No splitting scheme specified; defaulting to 'strang'.")
         self.splitting_scheme = create_splitting_scheme(splitting_scheme)
 
         # Prepare subsolvers using the mapping
         self.operator_subsolvers = []
         self._initialize_subsolvers(**kwargs)
+
+        logger.info(
+            "Solver: %s with %s splitting, %s on %s",
+            "-".join(op.value for op in self.operator_list),
+            type(self.splitting_scheme).__name__.removesuffix("Splitting"),
+            self.state.particle.value,
+            self.grid.summary(),
+        )
 
     def _initialize_subsolvers(self, **kwargs):
         """Initialize subsolvers with appropriate t_grids and canonical numeric parameters."""
@@ -351,8 +394,9 @@ class Solver:
             self.operator_list, self.substeps_per_op, t_grid_canonical
         )
 
-        logger.info(
-            f"Lengths of refined t_grids: {[len(refined_t_grids[op]) for op in self.operator_list]}"
+        logger.debug(
+            "Time grid points per operator: %s",
+            {op.value: len(refined_t_grids[op]) for op in self.operator_list},
         )
 
         for op in self.operator_list:
@@ -370,12 +414,19 @@ class Solver:
                 )
             )
 
-            logger.debug(f"Initialized '{op.value}' solver with params: {op_params}")
+            if logger.isEnabledFor(logging.DEBUG):
+                for key, value in op_params.items():
+                    logger.debug(
+                        "%s parameter %s: %s",
+                        solver_class.__name__,
+                        key,
+                        _describe_parameter(value, solver_class.PARAM_SPECS[key].unit),
+                    )
 
     def _advance(self, n_steps):
         """Advance the solution by n_steps using operator splitting."""
         manage_progress = False
-        if getattr(self, "_progress", None) is None:
+        if not self.quiet and getattr(self, "_progress", None) is None:
             self._progress = create_progress_bar()
             self._progress.start()
             self._task_id = self._progress.add_task(
@@ -387,36 +438,41 @@ class Solver:
             manage_progress = True
 
         next_metrics = 0.0
-        for _ in range(n_steps):
-            self.global_step += 1
+        try:
+            for _ in range(n_steps):
+                self.global_step += 1
 
-            # The bar redraws a few times per second: computing the extrema of the
-            # state for every step would cost more than a step on small grids
-            update = {"completed": self.global_step}
-            now = time.monotonic()
-            if now >= next_metrics:
-                next_metrics = now + _PROGRESS_METRICS_INTERVAL
-                val_max = np.max(self.state._values)
-                val_min = np.min(self.state._values)
-                update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
-            self._progress.update(self._task_id, **update)
+                if not self.quiet:
+                    # The bar redraws a few times per second: computing the extrema of the
+                    # state for every step would cost more than a step on small grids
+                    update = {"completed": self.global_step}
+                    now = time.monotonic()
+                    if now >= next_metrics:
+                        next_metrics = now + _PROGRESS_METRICS_INTERVAL
+                        val_max = np.max(self.state._values)
+                        val_min = np.min(self.state._values)
+                        update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+                    self._progress.update(self._task_id, **update)
 
-            self.splitting_scheme.apply(
-                self.operator_list,
-                self.operator_subsolvers,
-                self.substeps_per_op,
-                self.state,
-            )
+                self.splitting_scheme.apply(
+                    self.operator_list,
+                    self.operator_subsolvers,
+                    self.substeps_per_op,
+                    self.state,
+                )
+        finally:
+            # Also on errors: a live bar left running would swallow later output
+            if manage_progress or self.global_step >= self.total_steps:
+                if getattr(self, "_progress", None) is not None:
+                    self._progress.stop()
+                    self._progress = None
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                f"Advance finished | max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
+                f"Advance finished at step {self.global_step}/{self.total_steps}, "
+                f"t = {self.state.t_val:.4g} {su.TIME} | "
+                f"max(psi)={np.max(self.state._values):.4g} min(psi)={np.min(self.state._values):.4g}"
             )
-
-        if manage_progress or self.global_step >= self.total_steps:
-            if self._progress is not None:
-                self._progress.stop()
-                self._progress = None
 
     def run(self) -> State:
         """Advances the solution to the final time, updating and returning the final :py:class:`~saetass.state.State` object.
@@ -426,8 +482,24 @@ class Solver:
         State
             The final state of the solution after advancing to the final time.
         """
-        num_timesteps = self.grid.num_timesteps
-        self._advance(num_timesteps)
+        start = time.perf_counter()
+        steps = self.total_steps - self.global_step
+        self._advance(steps)
+        elapsed = time.perf_counter() - start
+        subcycles = {
+            op.value: sub.cfl_subcycles_total
+            for op, sub in zip(self.operator_list, self.operator_subsolvers)
+            if hasattr(sub, "cfl_subcycles_total")
+        }
+        logger.info(
+            "Solver finished %s in %.3g s (%.3g steps/s), at t = %.4g %s%s",
+            plural(steps, "step"),
+            elapsed,
+            steps / elapsed if elapsed > 0.0 else float("inf"),
+            self.state.t_val,
+            su.TIME,
+            f"; CFL sub-cycles: {subcycles}" if subcycles else "",
+        )
         return self.state
 
     def step(self, n_steps=1) -> State:
@@ -454,7 +526,7 @@ class Solver:
         n_samples : int, optional
             Number of times, evenly spread over the time grid, at which time-dependent parameters are evaluated. Default is ``3``.
         warn : bool, optional
-            Whether to issue a :py:class:`~saetass.diagnostics.DiagnosticsWarning` for each problem found. Default is ``True``.
+            Whether to log a warning for each problem found. Default is ``True``.
 
         Returns
         -------
@@ -462,6 +534,9 @@ class Solver:
             The diagnostics of the simulation.
         """
         result = diagnose(self, n_samples=n_samples)
+        if logger.isEnabledFor(logging.DEBUG):
+            # The warnings are logged on their own below
+            logger.debug("%s", result.report(include_warnings=not warn))
         if warn:
             _warn(result)
         return result

@@ -33,7 +33,6 @@ SCALES = [
 
 def _run(grid, psi_initial, problem_type, operator_params, psi_scale):
     solver = Solver(
-        grid=grid,
         state=State(grid=grid, psi_p=psi_initial * psi_scale * su.PSI_P),
         problem_type=problem_type,
         operator_params=operator_params,

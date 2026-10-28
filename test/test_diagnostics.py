@@ -2,6 +2,7 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
+import logging
 import math
 import warnings
 
@@ -10,7 +11,7 @@ import pytest
 
 from saetass import Grid, Solver, State
 from saetass import units as su
-from saetass.diagnostics import WARNING_SPLITTING_RATIO, DiagnosticsWarning, diagnose
+from saetass.diagnostics import WARNING_SPLITTING_RATIO, diagnose
 
 R = np.linspace(0.0, 10.0, 101)  # cell centers 0.1 pc apart
 ADVECTION = {
@@ -30,7 +31,6 @@ def _solver(problem_type, params, t_end=1.0, num_timesteps=10, p=None):
     shape = R.shape if p is None else (p.size, R.size)
     psi = np.broadcast_to(np.exp(-((R - 5.0) ** 2)), shape)
     return Solver(
-        grid=grid,
         state=State(grid=grid, psi_p=psi * su.PSI_P),
         problem_type=problem_type,
         operator_params=params,
@@ -140,14 +140,14 @@ def test_loss_timescale_is_shortest_loss_time(plot_results):
         plt.show()
 
 
-def test_fourier_number_scales_with_the_time_step_without_warning(plot_results):
+def test_fourier_number_scales_with_the_time_step_without_warning(
+    plot_results, saetass_caplog
+):
     coarse = _solver("diffusion", {"diffusion": _diffusion(0.5)}, num_timesteps=10)
     fine = _solver("diffusion", {"diffusion": _diffusion(0.5)}, num_timesteps=20)
-    with warnings.catch_warnings():
-        warnings.simplefilter(
-            "error"
-        )  # large Fourier numbers are reported, not warned about
-        fourier_coarse = coarse.diagnostics()["diffusion"].numbers["fourier_number"]
+    fourier_coarse = coarse.diagnostics()["diffusion"].numbers["fourier_number"]
+    # Large Fourier numbers are reported, not warned about
+    assert not _warnings(saetass_caplog)
     fourier_fine = fine.diagnostics()["diffusion"].numbers["fourier_number"]
     assert fourier_coarse > 1.0
     assert fourier_coarse == pytest.approx(2.0 * fourier_fine)
@@ -177,7 +177,16 @@ def test_fourier_number_scales_with_the_time_step_without_warning(plot_results):
         plt.show()
 
 
-def test_splitting_warning_suggests_enough_timesteps(plot_results):
+def _warnings(caplog):
+    """Messages logged by the diagnostics at the WARNING level."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "saetass.diagnostics" and record.levelno == logging.WARNING
+    ]
+
+
+def test_splitting_warning_suggests_enough_timesteps(plot_results, saetass_caplog):
     params = {
         "advection": _advection(2.0),
         "source": {"source": np.ones(R.size) * su.SOURCE_PSI_P},
@@ -186,15 +195,17 @@ def test_splitting_warning_suggests_enough_timesteps(plot_results):
     solver = _solver("advection-source", params, t_end=20.0, num_timesteps=20)
     ratio = 1.0 / 5.05
     suggested = math.ceil(20 * ratio / WARNING_SPLITTING_RATIO)
-    with pytest.warns(DiagnosticsWarning, match=f"at least {suggested} timesteps"):
-        diag = solver.diagnostics()
+    diag = solver.diagnostics()
+    (message,) = _warnings(saetass_caplog)
+    assert f"at least {suggested} timesteps" in message
+    assert diag.warnings == (message,)
     assert diag.numbers["splitting_ratio"] == pytest.approx(ratio)
 
+    saetass_caplog.clear()
     refined = _solver("advection-source", params, t_end=20.0, num_timesteps=suggested)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        refined_diag = refined.diagnostics()
+    refined_diag = refined.diagnostics()
     assert refined_diag.warnings == ()
+    assert not _warnings(saetass_caplog)
     assert refined_diag.numbers["splitting_ratio"] <= WARNING_SPLITTING_RATIO
 
     if plot_results:
@@ -334,6 +345,22 @@ def test_operators_without_scales():
     assert "splitting_ratio" not in still.numbers  # a single operator is not split
 
 
+def test_vanishing_diffusion_coefficients_do_not_warn():
+    # The harmonic mean of a face next to a zero coefficient divides by zero
+    D = np.where(R < 5.0, 0.0, 1.0) * su.DIFFUSION_COEFFICIENT
+    solver = _solver("diffusion", {"diffusion": {"D_values": D}})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        diag = solver.diagnostics(warn=False)
+
+    D_face = np.empty_like(solver.operator_subsolvers[0]._D_face)
+    G = np.empty_like(solver.operator_subsolvers[0]._G)
+    solver.operator_subsolvers[0]._compute_conductances(D.value[None, :], D_face, G)
+    assert np.all(D_face[0, 1:-1][R[1:] <= 5.0] == 0.0)
+    assert np.all(D_face[0, 1:-1][R[:-1] >= 5.0] > 0.0)
+    assert np.isfinite(diag["diffusion"].numbers["fourier_number"])
+
+
 def test_report_and_lookup():
     params = {
         "advection": _advection(2.0),
@@ -344,6 +371,7 @@ def test_report_and_lookup():
     )
     report = str(diag)
     assert "advection" in report and "courant_number" in report and "WARNING" in report
+    assert diag.report(include_warnings=False) == report.split("\n  WARNING")[0]
     with pytest.raises(KeyError):
         diag["diffusion"]
     with pytest.raises(ValueError, match="n_samples"):
@@ -454,10 +482,12 @@ def test_source_timescale_depends_on_its_variation_not_its_magnitude(plot_result
         plt.show()
 
 
-def test_fast_source_variation_triggers_the_splitting_warning(plot_results):
+def test_fast_source_variation_triggers_the_splitting_warning(
+    plot_results, saetass_caplog
+):
     params = {"diffusion": _diffusion(0.02), **_oscillating_source(0.37)}
-    with pytest.warns(DiagnosticsWarning, match=r"\(source"):
-        diag = _solver("diffusion-source", params).diagnostics()
+    diag = _solver("diffusion-source", params).diagnostics()
+    assert any("(source" in message for message in _warnings(saetass_caplog))
     assert diag["source"].timescale < diag["diffusion"].timescale
 
     if plot_results:
@@ -471,3 +501,17 @@ def test_fast_source_variation_triggers_the_splitting_warning(plot_results):
         plt.legend()
         plt.grid(True, alpha=0.5)
         plt.show()
+
+
+@pytest.mark.parametrize("warn", [True, False])
+def test_logged_report_shows_each_warning_once(saetass_caplog, warn):
+    params = {
+        "advection": _advection(2.0),
+        "source": {"source": np.ones(R.size) * su.SOURCE_PSI_P},
+    }
+    solver = _solver("advection-source", params, t_end=20.0, num_timesteps=2)
+    with saetass_caplog.at_level(logging.DEBUG, logger="saetass"):
+        diag = solver.diagnostics(warn=warn)
+    (message,) = diag.warnings
+    assert saetass_caplog.text.count(message) == 1
+    assert len(_warnings(saetass_caplog)) == int(warn)

@@ -6,7 +6,7 @@ import astropy.units as u
 import numpy as np
 import pytest
 
-from saetass import Grid, Particle, Solver, State
+from saetass import DiffusionSolver, Grid, Particle, Solver, State
 from saetass import units as su
 
 
@@ -51,7 +51,6 @@ def run_diffusion_test(grid_params, solver_params, initial_f):
 
     # Create solver
     solver = Solver(
-        grid=grid,
         state=state,
         problem_type="diffusion",
         operator_params={"diffusion": solv_p},
@@ -422,7 +421,7 @@ class Test2DEnergyRadiusDiffusion:
         assert np.allclose(f_final_1d, f_slice_from_2d, atol=1e-7)
 
 
-def test_state_size_must_match_solver_grid():
+def test_state_size_must_match_operator_grid():
     grid = Grid.uniform(
         r_min=0.0 * su.LENGTH,
         r_max=1.0 * su.LENGTH,
@@ -434,13 +433,10 @@ def test_state_size_must_match_solver_grid():
     other_grid = Grid.uniform(
         r_min=0.0 * su.LENGTH, r_max=1.0 * su.LENGTH, num_r_cells=12
     )
-    solver = Solver(
-        grid=grid,
-        state=State(psi_p=np.ones(12) * su.PSI_P, grid=other_grid),
-        problem_type="diffusion",
-        operator_params={
-            "diffusion": {"D_values": np.ones(10) * su.DIFFUSION_COEFFICIENT}
-        },
+    state = State(psi_p=np.ones(12) * su.PSI_P, grid=other_grid)
+    # An operator used on its own checks the state it advances
+    diffusion = DiffusionSolver(
+        grid, grid.t_grid.to_value(su.TIME), {"D_values": np.ones(10)}
     )
     with pytest.raises(ValueError, match="1D state values must have size N"):
-        solver.step(1)
+        diffusion.advance(1, state)

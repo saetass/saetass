@@ -62,7 +62,7 @@ def _run(operator, two_d, value, scheme="strang", order=2):
                 "v_centers": value,
                 "inflow_value_U": 0.01 * su.AREA * su.PSI_P,
                 "order": order,
-                "limiter": "minmod",
+                **({"limiter": "minmod"} if order == 2 else {}),
                 "cfl": 0.8,
             }
         }
@@ -72,14 +72,14 @@ def _run(operator, two_d, value, scheme="strang", order=2):
                 "P_dot": value,
                 "inflow_value_U": 0.0 * su.MOMENTUM * su.PSI_P,
                 "order": order,
-                "limiter": "vanleer",
+                **({"limiter": "vanleer"} if order == 2 else {}),
                 "cfl": 0.8,
             }
         }
     elif operator == "diffusion":
         params = {"diffusion": {"D_values": value, "psi_end": 0.0 * su.PSI_P}}
     state = State(grid=grid, psi_p=psi * su.PSI_P, particle=Particle.PROTON)
-    solver = Solver(grid, state, operator, params, splitting_scheme=scheme)
+    solver = Solver(state, operator, params, splitting_scheme=scheme)
     solver.run()
     return solver.state.psi_p.to_value(su.PSI_P), solver.operator_subsolvers[0]
 
@@ -206,8 +206,13 @@ def test_separable_units_are_checked():
     dimensionful_factor = Separable(
         [np.ones(R.size) * su.VELOCITY], [lambda t: 2.0 * su.LENGTH]
     )
+    required = {
+        "cfl": 0.5,
+        "order": 1,
+        "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+    }
     canonical = AdvectionSolver.convert_params(
-        {"v_centers": dimensionful_factor}, grid
+        {**required, "v_centers": dimensionful_factor}, grid
     )["v_centers"]
     with pytest.raises(u.UnitsError):
         canonical(0.0)
