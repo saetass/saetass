@@ -48,9 +48,9 @@ html_logo = r"_static/saetass_logotagline_horizontal.svg"
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_show_sourcelink = False
-# html_theme_options = {
-#     "logo_only": True,
-# }
+html_theme_options = {
+    "footer_end": ["changelog-link", "theme-version"],
+}
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
 
