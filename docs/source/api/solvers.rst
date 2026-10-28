@@ -28,8 +28,6 @@ The solver module
 Terminal output
 ---------------
 
-What a simulation prints while it runs, and how to choose it.
-
 .. automodule:: saetass.cli.output
     :members:
 
