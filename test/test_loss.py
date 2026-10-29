@@ -309,34 +309,6 @@ class TestLossSolverOrder:
 
 
 class TestLossSolverExceptionsAndEdges:
-    @pytest.mark.parametrize(
-        "extra",
-        [{}, {"v_centers_physical": np.ones((2, 2)) * su.VELOCITY}],
-        ids=["without_velocity", "with_velocity"],
-    )
-    def test_adiabatic_losses_not_implemented(self, extra):
-        grid = Grid(
-            r_centers=np.array([1.0, 2.0]) * su.LENGTH,
-            p_centers=np.array([50.0, 100.0]) * su.MOMENTUM,
-            t_grid=np.array([0.0, 1.0]) * su.TIME,
-        )
-        params = {
-            "P_dot": np.full((2, 2), -0.1) * su.MOMENTUM_LOSS_RATE,
-            "cfl": 0.5,
-            "order": 1,
-            "adiabatic_losses": True,
-            **extra,
-        }
-        state = State(
-            psi_p=np.ones((2, 2)) * su.PSI_P, grid=grid, particle=Particle.PROTON
-        )
-        with pytest.raises(NotImplementedError, match="Adiabatic losses"):
-            Solver(
-                state=state,
-                problem_type="loss",
-                operator_params={"loss": params},
-            )
-
     def test_callable_P_dot(self):
         grid = Grid(
             p_centers=np.array([50.0, 100.0]) * su.MOMENTUM,

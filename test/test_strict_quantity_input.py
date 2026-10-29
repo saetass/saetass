@@ -201,8 +201,9 @@ class TestSolverParameterConversion:
         solver_class = OperatorType(operator).solver_class
         with pytest.raises(ValueError) as excinfo:
             solver_class.convert_params({}, self._grid_2d())
-        assert str(excinfo.value) == (
-            f"Missing required {solver_class.__name__} parameter(s) {missing}."
+        # Losses also accept adiabatic_losses=True instead of P_dot, and say so
+        assert str(excinfo.value).startswith(
+            f"Missing required {solver_class.__name__} parameter(s) {missing}"
         )
 
     def test_physical_parameter_without_units_rejected(self):

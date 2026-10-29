@@ -16,13 +16,13 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - Golden outputs of every operator and a pytest-benchmark suite in `benchmarks/` ([#64](https://github.com/saetass/saetass/pull/64)).
 - This changelog, issue forms and a pull request template ([#66](https://github.com/saetass/saetass/issues/66), [#67](https://github.com/saetass/saetass/issues/67)).
 - Links to the GitHub repository and PyPI in the header of the documentation ([#46](https://github.com/saetass/saetass/issues/46)).
+- Adiabatic losses: `LossSolver(adiabatic_losses=True)` adds the momentum change `-(p / 3) div v` of the flow, which `Solver` takes from the advection operator, so that advection, diffusion and the adiabatic gains at a shock produce diffusive shock acceleration. `P_dot` is optional when they are on, `v_centers_physical` also accepts callables and `Separable` parameters, and `velocity_divergence` averages the divergence of a flow over the radial cells of a `Grid` ([#29](https://github.com/saetass/saetass/issues/29), [#71](https://github.com/saetass/saetass/pull/71)).
 
 ### Changed
 
 - **Breaking:** `Solver(state, problem_type, ...)` takes the grid from `state.grid` and no longer accepts a `Grid` as first argument ([#11](https://github.com/saetass/saetass/issues/11)).
 - **Breaking:** `compute_sychrotron_losses` is renamed `compute_synchrotron_losses`, without an alias ([#61](https://github.com/saetass/saetass/issues/61)).
 - **Breaking:** the advection and loss operators default to `order=2`, the `minmod` limiter and `cfl=0.5`, and a limiter given with `order=1` raises a `ValueError` ([#65](https://github.com/saetass/saetass/issues/65)).
-- **Breaking:** `LossSolver(adiabatic_losses=True)` raises `NotImplementedError` instead of silently ignoring the option ([#29](https://github.com/saetass/saetass/issues/29)).
 - A missing required operator parameter raises a `ValueError` naming the operator and the parameter, instead of a `KeyError` ([#65](https://github.com/saetass/saetass/issues/65)).
 - The inflow of the loss operator defaults to zero.
 - Advection from `r = 0` needs at least three radial cells, and `DiffusionSolver` rejects unknown boundary conditions and parameters of the wrong shape.
@@ -42,6 +42,7 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - `run()` after `step()` advances to the final time instead of failing with an `IndexError`.
 - A failing step no longer leaves the progress bar running.
 - The `mc` slope limiter used half of the central slope, so the advection and loss operators converged at first order with it; they now converge at second order, as with `minmod` and `vanleer`. Results with `limiter="mc"` change ([#70](https://github.com/saetass/saetass/pull/70)).
+- `Grid.volumes` gave the cell centered at the origin twice the volume of the ball inside its outer face, and `Grid.face_areas` an area to its inner face, since the first face of such a grid lies at `-dr / 2` ([#71](https://github.com/saetass/saetass/pull/71)).
 
 ## [0.5.1] - 2026-10-14
 

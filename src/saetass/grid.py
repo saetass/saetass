@@ -281,8 +281,10 @@ class Grid:
 
     @cached_property
     def volumes(self) -> u.Quantity | None:
-        """
+        r"""
         Cell volumes based on spherical geometry.
+
+        A cell centered at the origin, whose first face lies at :math:`-\Delta r / 2`, is the ball inside its outer face.
 
         Returns
         -------
@@ -290,16 +292,17 @@ class Grid:
             Array of cell volumes assuming spherical shells, or ``None`` if the spatial grid is not initialized. Units compatible with :py:data:`~saetass.units.VOLUME`.
         """
         if self.r_faces is not None:
-            volumes = (4.0 * np.pi / 3.0) * (
-                self.r_faces[1:] ** 3 - self.r_faces[:-1] ** 3
-            )
-            return volumes
+            # Radii below the origin hold no volume
+            faces = np.maximum(self.r_faces, 0.0 * su.LENGTH)
+            return (4.0 * np.pi / 3.0) * (faces[1:] ** 3 - faces[:-1] ** 3)
         return None
 
     @cached_property
     def face_areas(self) -> u.Quantity | None:
-        """
+        r"""
         Face areas based on spherical geometry.
+
+        The first face of a cell centered at the origin, at :math:`-\Delta r / 2`, is the origin itself, with no area.
 
         Returns
         -------
@@ -307,7 +310,7 @@ class Grid:
             Array of face areas assuming spherical shells, or ``None`` if the spatial grid is not initialized. Units compatible with :py:data:`~saetass.units.AREA`.
         """
         if self.r_faces is not None:
-            return 4.0 * np.pi * self.r_faces**2
+            return 4.0 * np.pi * np.maximum(self.r_faces, 0.0 * su.LENGTH) ** 2
         return None
 
     @cached_property

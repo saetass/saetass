@@ -146,6 +146,20 @@ class TestGrid:
         assert g.volumes is not None
         assert g.face_areas is not None
 
+    def test_volumes_and_areas_at_the_origin(self):
+        # The first face of a grid centered at the origin lies at -dr / 2, below r = 0
+        g = Grid(r_centers=np.linspace(0.0, 4.0, 5) * su.LENGTH)
+        assert g.r_faces[0] < 0.0 * su.LENGTH
+        volumes = g.volumes.to_value(su.VOLUME)
+        np.testing.assert_allclose(volumes[0], 4.0 * np.pi / 3.0 * 0.5**3, rtol=1e-15)
+        np.testing.assert_allclose(
+            volumes.sum(), 4.0 * np.pi / 3.0 * 4.5**3, rtol=1e-15
+        )
+        # The first face is the origin itself, and the others are spheres
+        areas = g.face_areas.to_value(su.AREA)
+        assert areas[0] == 0.0
+        np.testing.assert_allclose(areas[1:], 4.0 * np.pi * (np.arange(5) + 0.5) ** 2)
+
     def test_post_process(self):
         g = Grid(p_centers=[50.0, 100.0] * su.MOMENTUM, is_p_log=True)
         assert np.isclose(g.p_centers[0], np.log10(50.0))

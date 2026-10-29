@@ -183,6 +183,37 @@ def _all_operators_2d(scales):
     return _run(grid, psi_initial, "advection-diffusion-loss-source", params, Psi)
 
 
+def _shock_acceleration(scales):
+    """Advection, diffusion and adiabatic losses across a strong shock at r = 5."""
+    L, T, Psi = scales
+    r = np.linspace(0.0, 10.0, 40)
+    p = np.logspace(0, 2, 16)
+    t = np.linspace(0.0, 2.0, 9)
+    grid = Grid(
+        r_centers=r * L * su.LENGTH, p_centers=p * su.MOMENTUM, t_grid=t * T * su.TIME
+    )
+    v = np.where(r < 5.0, 2.0, 0.5 * (5.0 / np.maximum(r, 5.0)) ** 2)
+    params = {
+        "advection": {
+            "v_centers": v * (L / T) * su.VELOCITY,
+            "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+        },
+        "diffusion": {
+            "D_values": np.full((p.size, r.size), 0.5)
+            * (L**2 / T)
+            * su.DIFFUSION_COEFFICIENT
+        },
+        "loss": {"adiabatic_losses": True},
+        "source": {
+            "source": np.outer(p == p[2], np.exp(-((r - 5.0) ** 2)))
+            * (Psi / T)
+            * su.SOURCE_PSI_P
+        },
+    }
+    psi_initial = np.zeros((p.size, r.size))
+    return _run(grid, psi_initial, "advection-diffusion-loss-source", params, Psi)
+
+
 @pytest.mark.parametrize("scales", SCALES)
 @pytest.mark.parametrize("limiter", ["minmod", "vanleer", "mc"])
 def test_advection_is_scale_invariant(limiter, scales, plot_results):
@@ -249,5 +280,25 @@ def test_coupled_2d_problem_is_scale_invariant(scales, plot_results):
             scaled[rows],
             scales,
             "Advection-diffusion-loss-source, every third momentum",
+            "r / L",
+        )
+
+
+@pytest.mark.parametrize("scales", SCALES)
+def test_adiabatic_losses_at_a_shock_are_scale_invariant(scales, plot_results):
+    reference = _shock_acceleration(REFERENCE)
+    # Particles injected at the third momentum are accelerated to the higher ones
+    assert np.all(np.isfinite(reference)) and np.any(reference[5:] > 0)
+    scaled = _shock_acceleration(scales)
+    np.testing.assert_array_equal(scaled, reference)
+
+    if plot_results:
+        rows = slice(None, None, 3)  # every third momentum
+        _plot(
+            np.linspace(0.0, 10.0, 40),
+            reference[rows],
+            scaled[rows],
+            scales,
+            "Shock acceleration, every third momentum",
             "r / L",
         )
