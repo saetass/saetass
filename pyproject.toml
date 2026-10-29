@@ -56,6 +56,8 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/saetass/saetass"
 Repository = "https://github.com/saetass/saetass.git"
+Documentation = "https://saetass.readthedocs.io/"
+Changelog = "https://github.com/saetass/saetass/blob/main/CHANGELOG.md"
 
 # --- SPECIFIC CONFIGURATION FOR HATCH ---
 

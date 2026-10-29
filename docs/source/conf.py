@@ -1,5 +1,6 @@
 import os
 import sys
+from importlib.metadata import version as package_version
 
 sys.path.insert(0, os.path.abspath(r"../../src"))
 
@@ -14,7 +15,8 @@ sys.path.insert(0, os.path.abspath(r"../../src"))
 project = "SAETASS"
 copyright = "2026, José María García Morillo"
 author = "José María García Morillo"
-release = "0.1.0"
+# The version of the installed package, which hatch-vcs takes from the latest git tag
+release = package_version("saetass")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -48,9 +50,21 @@ html_logo = r"_static/saetass_logotagline_horizontal.svg"
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_show_sourcelink = False
-# html_theme_options = {
-#     "logo_only": True,
-# }
+html_theme_options = {
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/saetass/saetass",
+            "icon": "fab fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/saetass/",
+            "icon": "fab fa-python",
+        },
+    ],
+    "footer_end": ["changelog-link", "theme-version"],
+}
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
 

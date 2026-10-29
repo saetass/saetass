@@ -140,6 +140,11 @@ Select the installation method that aligns with your intended usage.
    Throughout this documentation we invoke pip via ``python -m pip`` instead of the standalone ``pip`` executable.
    This guarantees that the package manager is bound to the currently active interpreter and avoids edge cases in environments where multiple Python installations coexist.
 
+Upgrading
+---------
+
+Upgrade an existing installation with :code:`python -m pip install --upgrade saetass`. Until version 1.0.0, a new minor release may change the public API: the :doc:`changelog` lists the changes of every release and marks those that require changes to existing scripts as **Breaking**.
+
 Post-Installation Verification
 ------------------------------
 

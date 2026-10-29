@@ -136,7 +136,7 @@ For software-specific citations, you may use the **Zenodo DOI** [10.5281/zenodo.
 
 Contributions, bug reports and feature suggestions are welcome! Whether you want to fix a typo, improve a solver or add a new physical module: we'd love your help!
 
-Please read the [Contributing Guidelines](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) before getting started.
+Please read the [Contributing Guidelines](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) before getting started. The [changelog](CHANGELOG.md) lists the changes of every release.
 
 ## License
 

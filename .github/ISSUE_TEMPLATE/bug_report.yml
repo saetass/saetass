@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in SAETASS fails or gives wrong results.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please check the [open issues](https://github.com/saetass/saetass/issues) first, in case it is already known.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal example
+      description: The shortest script that reproduces the problem, with its grid, parameters and units.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error message or output
+      description: The full traceback, or the wrong values or figure. Running with `SAETASS_LOG_LEVEL=DEBUG` adds the setup of every operator to the log.
+      render: text
+  - type: input
+    id: saetass-version
+    attributes:
+      label: SAETASS version
+      description: The output of `python -m pip show saetass`, or the commit if you installed it from the repository.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: Python 3.12, macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Versions of the dependencies
+      description: The output of `python -m pip list`, if the problem may come from NumPy, Numba, Astropy or another dependency.
+      render: text
