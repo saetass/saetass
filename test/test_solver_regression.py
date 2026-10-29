@@ -3,7 +3,9 @@ Regression tests that freeze the numerical output of every operator.
 
 The golden data in ``test/data/golden_solver_outputs.npz`` was generated with the NumPy
 implementation of the operators of SAETASS 0.5: a new implementation must reproduce it
-to rounding error.
+to rounding error. The exceptions are the cases with the MC limiter (``advection_mc``,
+``loss_mc``, ``loss_dynamic``), regenerated when its central slope, which was halved,
+was fixed; the previous data is in commit ``fff6d8b``.
 The cases are small and short, but together they reach every branch of the kernels
 (orders, limiters, boundary conditions, flow directions, 1D and 2D grids, static and
 time-dependent parameters, and both splitting schemes). Regenerate the data with
