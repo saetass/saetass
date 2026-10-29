@@ -41,6 +41,7 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - `solver.diagnostics()` no longer warns about a division by zero where the diffusion coefficient vanishes ([#60](https://github.com/saetass/saetass/issues/60)).
 - `run()` after `step()` advances to the final time instead of failing with an `IndexError`.
 - A failing step no longer leaves the progress bar running.
+- `Grid.volumes` gave the cell centered at the origin twice the volume of the ball inside its outer face, and `Grid.face_areas` an area to its inner face, since the first face of such a grid lies at `-dr / 2`.
 
 ## [0.5.1] - 2026-10-14
 

@@ -52,11 +52,6 @@ def _divergence_geometry(grid: Grid) -> tuple[np.ndarray, ...]:
     faces = grid.r_faces.to_value(su.LENGTH)
     areas = grid.face_areas.to_value(su.AREA)
     volumes = grid.volumes.to_value(su.VOLUME)
-    if faces[0] <= 0.0:
-        # Grid places the first face of a cell centered at r = 0 below the origin: the
-        # cell is the ball inside its outer face, and nothing flows through its center
-        areas[0] = 0.0
-        volumes[0] = 4.0 * np.pi / 3.0 * faces[1] ** 3
     return centers, faces, areas, 1.0 / volumes
 
 
