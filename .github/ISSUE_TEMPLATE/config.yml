@@ -1,8 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: Documentation
-    url: https://saetass.readthedocs.io/
-    about: The installation guide, tutorials, examples and API reference.
-  - name: Changelog
-    url: https://github.com/saetass/saetass/blob/main/CHANGELOG.md
-    about: What changed in each release, including the changes that break existing scripts.
