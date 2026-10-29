@@ -84,7 +84,7 @@ def _limited_edge(d_one, d_two, limiter):
         return _minmod(d_one, d_two, d_one)
     if limiter == 1:
         return _vanleer(d_one, d_two)
-    return _minmod(2.0 * d_one, 2.0 * d_two, 0.5 * d_two)
+    return _minmod(2.0 * d_one, 2.0 * d_two, d_two)
 
 
 @njit(inline="always", error_model="numpy")
@@ -116,7 +116,7 @@ def _slopes(u, inv_left, inv_center, limiter, out):
             d_left = (u[i] - u[i - 1]) * inv_left[i]
             d_right = (u[i + 1] - u[i]) * inv_left[i + 1]
             d_center = (u[i + 1] - u[i - 1]) * inv_center[i]
-            out[i] = _minmod(2.0 * d_left, 2.0 * d_right, 0.5 * d_center)
+            out[i] = _minmod(2.0 * d_left, 2.0 * d_right, d_center)
     d_one = (u[1] - u[0]) * inv_left[1]
     d_two = (u[2] - u[0]) * inv_center[1]
     out[0] = _limited_edge(d_one, d_two, limiter)

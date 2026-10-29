@@ -41,6 +41,7 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - `solver.diagnostics()` no longer warns about a division by zero where the diffusion coefficient vanishes ([#60](https://github.com/saetass/saetass/issues/60)).
 - `run()` after `step()` advances to the final time instead of failing with an `IndexError`.
 - A failing step no longer leaves the progress bar running.
+- The `mc` slope limiter used half of the central slope, so the advection and loss operators converged at first order with it; they now converge at second order, as with `minmod` and `vanleer`. Results with `limiter="mc"` change ([#70](https://github.com/saetass/saetass/pull/70)).
 
 ## [0.5.1] - 2026-10-14
 

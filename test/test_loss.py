@@ -558,3 +558,49 @@ class TestLossSolver2D:
         )
         grid_1d = Grid(p_centers=p, t_grid=t_grid)
         assert subcycles(grid_2d, rate_2d) == subcycles(grid_1d, rate[:, 0])
+
+
+def _shift_error(num_p: int, limiter: str) -> float:
+    """Relative L2 error of a Gaussian in log p shifted by a uniform generalized velocity."""
+    alpha, t_final, y0, width = 0.8, 1.0, 1.8, 0.25
+    p = np.logspace(0.0, 3.0, num_p)
+    y = np.log10(p)
+    gaussian = lambda y: np.exp(-(((y - y0) / width) ** 2))  # noqa: E731
+    r = np.linspace(0.0, 1.0, 5)
+    grid = Grid(
+        r_centers=r * su.LENGTH,
+        p_centers=p * su.MOMENTUM,
+        t_grid=np.linspace(0.0, t_final, 41) * su.TIME,
+    )
+    # With P_dot = -alpha p, U = p psi is shifted by alpha t / ln(10) in log p
+    psi = np.tile((gaussian(y) / p)[:, None], (1, r.size))
+    solver = Solver(
+        state=State(psi_p=psi * su.PSI_P, grid=grid, particle=Particle.PROTON),
+        problem_type="loss",
+        operator_params={
+            "loss": {
+                "P_dot": np.tile(-alpha * p[:, None], (1, r.size))
+                * su.MOMENTUM_LOSS_RATE,
+                "limiter": limiter,
+                "cfl": 0.5,
+                "inflow_value_U": 0.0 * su.MOMENTUM * su.PSI_P,
+            }
+        },
+    )
+    solver.step(40)
+    U = solver.state.psi_p.to_value(su.PSI_P)[:, 0] * p
+    exact = gaussian(y + alpha * t_final / np.log(10.0))
+    return float(np.linalg.norm(U - exact) / np.linalg.norm(exact))
+
+
+@pytest.mark.parametrize("limiter", ["minmod", "vanleer", "mc"])
+def test_smooth_shift_converges_at_second_order(limiter):
+    """Every limiter reaches the second order on smooth data (the slope of 'mc' was once halved)."""
+    errors = [_shift_error(n, limiter) for n in (60, 120, 240)]
+    orders = np.log2(np.array(errors[:-1]) / np.array(errors[1:]))
+    assert np.all(orders > 1.5), (errors, orders)
+
+
+def test_mc_is_more_accurate_than_minmod_on_smooth_data():
+    """The monotonized central limiter keeps more of a smooth profile than minmod."""
+    assert _shift_error(120, "mc") < _shift_error(120, "minmod")
