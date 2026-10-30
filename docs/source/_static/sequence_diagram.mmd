@@ -1,0 +1,87 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontFamily: "CMU Serif"
+    primaryColor: '#4D7EA8'
+    primaryTextColor: '#B6C2D9'
+    primaryBorderColor: '#4D7EA8'
+    lineColor: '#F3AC4B'
+    secondaryColor: '#F3AC4B'
+    secondaryBorderColor: '#272932'
+    tertiaryColor: '#F3AC4B'
+    tertiaryBorderColor: '#272932'
+    activationBorderColor: '#F3AC4B'
+    backgroundColor: '#B6C2D9'
+    textColor: '#4D7EA8'
+    noteBkgColor: '#F3AC4B'
+    noteTextColor: '#272932'
+    noteBorderColor: '#F3AC4B'
+  themeCSS: |
+    .mermaid span { font-size: 20px !important; }
+    .mermaid text { font-size: 20px !important; }
+    .loopText { font-size: 16.5px !important; }
+    .messageText { font-size: 16.5px !important; }
+    .actor { font-size: 20px !important; }
+    .entity { color: #272932 !important; primaryTextColor: #272932 !important;}
+    .noteText { font-size: 22px !important; }
+---
+sequenceDiagram
+    %%participant Script@{ "type": "collections" } as Main script
+    participant Script as Main script
+    participant State as State
+    participant Solver as Solver
+    participant Split as SplittingScheme
+    participant Sub as SubSolver
+    participant CLI as CLI
+
+    %% INITIALIZATION PHASE
+    Note over Script, CLI: Phase 1: Initialization
+    Script->>Solver: initialize Solver
+    activate Solver
+    Solver->>CLI: print banner and set up CLI
+    Solver->>Solver: parse and validate problem
+    Solver->>Split: initialize SplittingScheme
+    activate Split
+    Split-->>Solver: scheme instance
+    deactivate Split
+
+    Solver->>Split: subrefine time grids
+    activate Split
+    Split-->>Solver: surefined time grids
+    deactivate Split
+
+    loop for each parsed SubSolver
+        Solver->>Sub: initialize SubSolver
+        activate Sub
+        Sub->>Solver: SubSolver instance
+        deactivate Sub
+
+    end
+    Solver-->>Script: Solver instance ready
+    deactivate Solver
+
+    %% RUN/STEP PHASE
+    Note over Script, CLI: Phase 2: Time integration
+    Script->>Solver: demand calculations execution
+    activate Solver
+    Solver->>CLI: create a progress bar
+    loop for number of steps to advance
+        Solver->>CLI: update porgress bar
+        %% Splitting Scheme takes control
+        Solver->>Split: apply splitting step
+        activate Split
+        loop for each operator in sequence
+            Split->>Sub: advance State
+            activate Sub
+            Sub->>Sub: execute numerical routine
+            Sub->>State: update State
+            Sub-->>Split: advance finished
+            deactivate Sub
+        end
+        Split-->>Solver: splitting step completed
+        deactivate Split
+    end
+    Solver->>CLI: stop progress bar
+    Solver-->>Script: return updated State
+    deactivate Solver

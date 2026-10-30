@@ -1,0 +1,1484 @@
+/* =============================================================================
+   SAETASS — Custom Stylesheet for pydata-sphinx-theme
+   =============================================================================
+   Single source of truth: every color, font, spacing, shadow, radius, and
+   transition is declared ONCE in this :root block.  The rest of the file
+   references only var(--saetass-*) or var(--pst-*) tokens.
+   ============================================================================= */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §0  WEB FONTS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §1  DESIGN TOKENS — Global Variables  (THE source of truth)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+    /* ── Brand Core ────────────────────────────────────────────────────────── */
+    --saetass-brand-yellow: #F3AC4B;
+    --saetass-brand-orange: #F3664B;
+    --saetass-brand-dark: #272932;
+    --saetass-brand-blue: #4D7EA8;
+    --saetass-brand-grey: #B6C2D9;
+
+    /* ── Derived: Blue Ramp ────────────────────────────────────────────────── */
+    --saetass-blue-50: #EDF4F9;
+    --saetass-blue-100: #D6E6F1;
+    --saetass-blue-200: #ADC9E0;
+    --saetass-blue-300: #84ACCE;
+    --saetass-blue-400: #5B8FBD;
+    --saetass-blue-500: #4D7EA8;
+    --saetass-blue-600: #3D6588;
+    --saetass-blue-700: #2E4D68;
+    --saetass-blue-800: #1F3548;
+    --saetass-blue-900: #101D28;
+
+    /* ── Derived: Orange Ramp ──────────────────────────────────────────────── */
+    --saetass-orange-50: #FEF0EC;
+    --saetass-orange-100: #FDDDD5;
+    --saetass-orange-200: #F9B9A7;
+    --saetass-orange-300: #F6937A;
+    --saetass-orange-400: #F37D62;
+    --saetass-orange-500: #F3664B;
+    --saetass-orange-600: #D9503A;
+    --saetass-orange-700: #A63B2A;
+    --saetass-orange-800: #73291D;
+    --saetass-orange-900: #401710;
+
+    /* ── Derived: Yellow Ramp ──────────────────────────────────────────────── */
+    --saetass-yellow-50: #FEF6E9;
+    --saetass-yellow-100: #FCEAD0;
+    --saetass-yellow-200: #F9D5A1;
+    --saetass-yellow-300: #F6C073;
+    --saetass-yellow-400: #F3AC4B;
+    --saetass-yellow-500: #E09530;
+    --saetass-yellow-600: #C07D1E;
+    --saetass-yellow-700: #8F5D16;
+    --saetass-yellow-800: #5F3E0F;
+    --saetass-yellow-900: #2F1F07;
+
+    /* ── Derived: Dark / Neutral Ramp ──────────────────────────────────────── */
+    --saetass-neutral-50: #F5F6F7;
+    --saetass-neutral-100: #E8EAF0;
+    --saetass-neutral-200: #CDD2DE;
+    --saetass-neutral-300: #B6C2D9;
+    --saetass-neutral-400: #8D97AD;
+    --saetass-neutral-500: #636D82;
+    --saetass-neutral-600: #464E5E;
+    --saetass-neutral-700: #353A47;
+    --saetass-neutral-800: #272932;
+    --saetass-neutral-900: #1B1D24;
+    --saetass-neutral-950: #121318;
+
+    /* ── Derived: Grey Ramp ────────────────────────────────────────────────── */
+    --saetass-grey-50: #F7F8FB;
+    --saetass-grey-100: #EEF0F5;
+    --saetass-grey-200: #DEE2EC;
+    --saetass-grey-300: #CDD4E2;
+    --saetass-grey-400: #B6C2D9;
+    --saetass-grey-500: #96A3BC;
+    --saetass-grey-600: #76849F;
+    --saetass-grey-700: #5A6680;
+    --saetass-grey-800: #414B5E;
+    --saetass-grey-900: #2A3140;
+
+    /* ── Semantic: Status Colors ───────────────────────────────────────────── */
+    --saetass-color-success: #1A9A5B;
+    --saetass-color-success-bg: #E3F5EC;
+    --saetass-color-success-dk: #5FBB8A;
+    --saetass-color-success-bg-dk: #0A2F1A;
+
+    --saetass-color-info: #2B72C7;
+    --saetass-color-info-bg: #E1EDF9;
+    --saetass-color-info-dk: #6FA3E0;
+    --saetass-color-info-bg-dk: #0C2A4F;
+
+    --saetass-color-warning: #D68A0A;
+    --saetass-color-warning-bg: #FDF3DE;
+    --saetass-color-warning-dk: #F0B44A;
+    --saetass-color-warning-bg-dk: #3A2804;
+
+    --saetass-color-danger: #D03040;
+    --saetass-color-danger-bg: #FBEAEC;
+    --saetass-color-danger-dk: #E4818B;
+    --saetass-color-danger-bg-dk: #3E0F14;
+
+    /* ── Typography ────────────────────────────────────────────────────────── */
+    --saetass-font-family-base: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --saetass-font-family-heading: "Inter", system-ui, -apple-system, sans-serif;
+    --saetass-font-family-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
+    --saetass-font-size-base: 16px;
+    --saetass-font-size-sm: 0.875rem;
+    --saetass-font-size-xs: 0.8125rem;
+    --saetass-font-size-lg: 1.125rem;
+    --saetass-line-height-base: 1.65;
+    --saetass-line-height-heading: 1.3;
+    --saetass-font-weight-normal: 400;
+    --saetass-font-weight-medium: 500;
+    --saetass-font-weight-semibold: 600;
+    --saetass-font-weight-bold: 700;
+
+    /* ── Layout / Spacing ──────────────────────────────────────────────────── */
+    --saetass-radius-xs: 0.125rem;
+    --saetass-radius-sm: 0.25rem;
+    --saetass-radius-md: 0.5rem;
+    --saetass-radius-lg: 0.75rem;
+    --saetass-radius-xl: 1rem;
+    --saetass-spacing-xs: 0.25rem;
+    --saetass-spacing-sm: 0.5rem;
+    --saetass-spacing-md: 1rem;
+    --saetass-spacing-lg: 1.5rem;
+    --saetass-spacing-xl: 2rem;
+
+    /* ── Transitions ───────────────────────────────────────────────────────── */
+    --saetass-transition-speed: 180ms;
+    --saetass-transition-fn: cubic-bezier(0.4, 0, 0.2, 1);
+    --saetass-transition-base: var(--saetass-transition-speed) var(--saetass-transition-fn);
+
+    /* ── Shadows ───────────────────────────────────────────────────────────── */
+    --saetass-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --saetass-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --saetass-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+    --saetass-shadow-xl: 0 8px 28px rgba(0, 0, 0, 0.12);
+
+    /* ── Focus ring ────────────────────────────────────────────────────────── */
+    --saetass-focus-ring: 0 0 0 3px rgba(77, 126, 168, 0.45);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §2  LIGHT MODE  — pydata-sphinx-theme variable overrides
+   ───────────────────────────────────────────────────────────────────────────── */
+
+html[data-theme="light"] {
+    /* Primary / Secondary / Accent */
+    --pst-color-primary: var(--saetass-blue-600);
+    --pst-color-primary-bg: var(--saetass-blue-100);
+    --pst-color-secondary: var(--saetass-orange-500);
+    --pst-color-secondary-bg: var(--saetass-orange-50);
+    --pst-color-accent: var(--saetass-yellow-500);
+    --pst-color-accent-bg: var(--saetass-yellow-50);
+
+    /* Depth surfaces */
+    --pst-color-background: #FFFFFF;
+    --pst-color-on-background: #FFFFFF;
+    --pst-color-surface: var(--saetass-neutral-50);
+    --pst-color-on-surface: var(--saetass-neutral-800);
+
+    /* Text */
+    --pst-color-text-base: var(--saetass-neutral-800);
+    --pst-color-text-muted: var(--saetass-neutral-500);
+    --pst-color-heading: var(--saetass-blue-700);
+
+    /* Links */
+    --pst-color-link: var(--saetass-blue-600);
+    --pst-color-link-hover: var(--saetass-orange-500);
+
+    /* Borders */
+    --pst-color-border: var(--saetass-neutral-200);
+    --pst-color-border-muted: var(--saetass-neutral-100);
+
+    /* Status */
+    --pst-color-info: var(--saetass-color-info);
+    --pst-color-info-bg: var(--saetass-color-info-bg);
+    --pst-color-warning: var(--saetass-color-warning);
+    --pst-color-warning-bg: var(--saetass-color-warning-bg);
+    --pst-color-success: var(--saetass-color-success);
+    --pst-color-success-bg: var(--saetass-color-success-bg);
+    --pst-color-danger: var(--saetass-color-danger);
+    --pst-color-danger-bg: var(--saetass-color-danger-bg);
+    --pst-color-attention: var(--saetass-color-warning);
+    --pst-color-attention-bg: var(--saetass-color-warning-bg);
+
+    /* Tables */
+    --pst-color-table: var(--saetass-neutral-800);
+    --pst-color-table-row-hover-bg: var(--saetass-blue-50);
+    --pst-color-table-inner-border: var(--saetass-neutral-200);
+    --pst-color-table-outer-border: var(--saetass-neutral-100);
+    --pst-color-table-heading-bg: var(--saetass-neutral-50);
+    --pst-color-table-row-zebra-high-bg: #FFFFFF;
+    --pst-color-table-row-zebra-low-bg: var(--saetass-neutral-50);
+
+    /* Misc */
+    --pst-color-inline-code: var(--saetass-orange-700);
+    --pst-color-target: var(--saetass-yellow-100);
+    --pst-color-shadow: rgba(0, 0, 0, 0.08);
+    --pst-color-blockquote-notch: var(--saetass-blue-400);
+    --pst-color-link-higher-contrast: var(--saetass-blue-700);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §3  DARK MODE  — pydata-sphinx-theme variable overrides
+   ───────────────────────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] {
+    /* Primary / Secondary / Accent */
+    --pst-color-primary: var(--saetass-blue-400);
+    --pst-color-primary-bg: var(--saetass-blue-900);
+    --pst-color-secondary: var(--saetass-orange-400);
+    --pst-color-secondary-bg: var(--saetass-orange-900);
+    --pst-color-accent: var(--saetass-yellow-400);
+    --pst-color-accent-bg: var(--saetass-yellow-900);
+
+    /* Depth surfaces */
+    --pst-color-background: var(--saetass-neutral-950);
+    --pst-color-on-background: var(--saetass-neutral-900);
+    --pst-color-surface: var(--saetass-neutral-700);
+    --pst-color-on-surface: var(--saetass-neutral-100);
+
+    /* Text */
+    --pst-color-text-base: var(--saetass-neutral-200);
+    --pst-color-text-muted: var(--saetass-neutral-400);
+    --pst-color-heading: var(--saetass-blue-200);
+
+    /* Links */
+    --pst-color-link: var(--saetass-blue-300);
+    --pst-color-link-hover: var(--saetass-orange-300);
+
+    /* Borders */
+    --pst-color-border: var(--saetass-neutral-600);
+    --pst-color-border-muted: var(--saetass-neutral-700);
+
+    /* Status */
+    --pst-color-info: var(--saetass-color-info-dk);
+    --pst-color-info-bg: var(--saetass-color-info-bg-dk);
+    --pst-color-warning: var(--saetass-color-warning-dk);
+    --pst-color-warning-bg: var(--saetass-color-warning-bg-dk);
+    --pst-color-success: var(--saetass-color-success-dk);
+    --pst-color-success-bg: var(--saetass-color-success-bg-dk);
+    --pst-color-danger: var(--saetass-color-danger-dk);
+    --pst-color-danger-bg: var(--saetass-color-danger-bg-dk);
+    --pst-color-attention: var(--saetass-color-warning-dk);
+    --pst-color-attention-bg: var(--saetass-color-warning-bg-dk);
+
+    /* Tables */
+    --pst-color-table: var(--saetass-neutral-200);
+    --pst-color-table-row-hover-bg: var(--saetass-blue-900);
+    --pst-color-table-inner-border: var(--saetass-neutral-600);
+    --pst-color-table-outer-border: var(--saetass-neutral-700);
+    --pst-color-table-heading-bg: var(--saetass-neutral-700);
+    --pst-color-table-row-zebra-high-bg: var(--saetass-neutral-900);
+    --pst-color-table-row-zebra-low-bg: var(--saetass-neutral-800);
+
+    /* Misc */
+    --pst-color-inline-code: var(--saetass-orange-300);
+    --pst-color-target: var(--saetass-yellow-900);
+    --pst-color-shadow: rgba(0, 0, 0, 0.25);
+    --pst-color-blockquote-notch: var(--saetass-blue-400);
+    --pst-color-link-higher-contrast: var(--saetass-blue-300);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §4  TYPOGRAPHY
+   ───────────────────────────────────────────────────────────────────────────── */
+
+html {
+    --pst-font-size-base: var(--saetass-font-size-base);
+}
+
+body {
+    font-family: var(--saetass-font-family-base);
+    line-height: var(--saetass-line-height-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.bd-content h1,
+.bd-content h2,
+.bd-content h3,
+.bd-content h4,
+.bd-content h5,
+.bd-content h6 {
+    font-family: var(--saetass-font-family-heading);
+    line-height: var(--saetass-line-height-heading);
+    color: var(--pst-color-heading);
+}
+
+h1 {
+    font-weight: var(--saetass-font-weight-bold);
+}
+
+h2 {
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+h3,
+h4,
+h5,
+h6 {
+    font-weight: var(--saetass-font-weight-medium);
+}
+
+h2 {
+    padding-bottom: var(--saetass-spacing-xs);
+    border-bottom: 2px solid var(--pst-color-border);
+    margin-top: var(--saetass-spacing-xl);
+}
+
+code,
+pre,
+kbd,
+samp,
+code.literal,
+.highlight pre {
+    font-family: var(--saetass-font-family-mono);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §5  HEADER / NAVBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-header {
+    background-color: var(--pst-color-on-background);
+    border-bottom: 1px solid var(--pst-color-border);
+    box-shadow: var(--saetass-shadow-sm);
+}
+
+.bd-header .navbar-brand img {
+    max-height: 2.5rem;
+    width: auto;
+}
+
+.bd-header .nav-link {
+    color: var(--pst-color-text-base);
+    font-weight: var(--saetass-font-weight-medium);
+    transition: color var(--saetass-transition-base);
+}
+
+.bd-header .nav-link:hover {
+    color: var(--pst-color-primary);
+}
+
+.bd-header .nav-link.active,
+.bd-header .nav-link[aria-current="page"] {
+    color: var(--pst-color-primary);
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §6  SIDEBAR — Primary (Left)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-sidebar-primary {
+    border-right: 1px solid var(--pst-color-border);
+}
+
+.bd-sidebar-primary .sidebar-primary-items__start .nav-link,
+.bd-sidebar-primary .sidebar-primary-items__end .nav-link,
+.bd-sidebar-primary .toctree-l1>a,
+.bd-sidebar-primary .toctree-l2>a,
+.bd-sidebar-primary .toctree-l3>a {
+    color: var(--pst-color-text-base);
+    font-size: var(--saetass-font-size-sm);
+    transition: color var(--saetass-transition-base),
+        background-color var(--saetass-transition-base);
+    border-radius: var(--saetass-radius-sm);
+}
+
+.bd-sidebar-primary .nav-link:hover,
+.bd-sidebar-primary .toctree-l1>a:hover,
+.bd-sidebar-primary .toctree-l2>a:hover,
+.bd-sidebar-primary .toctree-l3>a:hover {
+    color: var(--pst-color-primary);
+    background-color: var(--pst-color-primary-bg);
+}
+
+.bd-sidebar-primary .nav-link.active,
+.bd-sidebar-primary .current>a {
+    color: var(--pst-color-primary);
+    font-weight: var(--saetass-font-weight-semibold);
+    border-left: 3px solid var(--pst-color-primary);
+}
+
+.bd-sidebar-primary p.caption {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-xs);
+    font-weight: var(--saetass-font-weight-bold);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §7  SIDEBAR — Secondary (Right / TOC)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-sidebar-secondary {
+    border-left: 1px solid var(--pst-color-border);
+}
+
+.bd-toc-item a {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-sm);
+    transition: color var(--saetass-transition-base);
+}
+
+.bd-toc-item a:hover {
+    color: var(--pst-color-primary);
+}
+
+.bd-toc-item a.active {
+    color: var(--pst-color-primary);
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+/* Hide empty right-sidebar TOC */
+.bd-docs-nav:has(.bd-toc-item:empty) {
+    display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §8  MAIN CONTENT AREA
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-main {
+    background-color: var(--pst-color-background);
+}
+
+.bd-content {
+    color: var(--pst-color-text-base);
+}
+
+.bd-content a:not(.btn):not(.sd-card):not(.headerlink) {
+    color: var(--pst-color-link);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color var(--saetass-transition-base),
+        border-color var(--saetass-transition-base);
+}
+
+.bd-content a:not(.btn):not(.sd-card):not(.headerlink):hover {
+    color: var(--pst-color-link-hover);
+    border-bottom-color: var(--pst-color-link-hover);
+}
+
+.bd-content hr {
+    border-color: var(--pst-color-border);
+    opacity: 0.5;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §9  HEADINGS & SECTION ANCHORS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.headerlink {
+    color: var(--pst-color-text-muted);
+    opacity: 0;
+    transition: opacity var(--saetass-transition-base),
+        color var(--saetass-transition-base);
+}
+
+h1:hover>.headerlink,
+h2:hover>.headerlink,
+h3:hover>.headerlink,
+h4:hover>.headerlink,
+h5:hover>.headerlink,
+h6:hover>.headerlink {
+    opacity: 1;
+}
+
+.headerlink:hover {
+    color: var(--pst-color-primary);
+    opacity: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §10  CODE BLOCKS & INLINE CODE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+code.literal {
+    color: var(--pst-color-inline-code);
+    background-color: var(--pst-color-surface);
+    border: 1px solid var(--pst-color-border-muted);
+    border-radius: var(--saetass-radius-sm);
+    padding: 0.1em 0.35em;
+    font-size: var(--saetass-font-size-sm);
+}
+
+/* Target only highlights that ARE NOT inside a prompt */
+:not(.prompt)>.highlight,
+:not(.prompt)>div[class*="highlight-"] {
+    border-radius: var(--saetass-radius-md);
+    border: 1px solid var(--pst-color-border-muted);
+    overflow: hidden;
+    margin-bottom: var(--saetass-spacing-md);
+}
+
+/* Ensure the pre inside a prompt doesn't get the global padding/background */
+:not(.prompt)>.highlight pre {
+    font-size: var(--saetass-font-size-sm);
+    line-height: 1.55;
+    padding: var(--saetass-spacing-md);
+    margin: 0;
+}
+
+/* Code-block copy button */
+.highlight button.copybtn {
+    color: var(--pst-color-text-muted);
+    transition: color var(--saetass-transition-base);
+}
+
+.highlight button.copybtn:hover {
+    color: var(--pst-color-primary);
+}
+
+/* Line-number gutter */
+.linenodiv pre {
+    color: var(--pst-color-text-muted);
+    border-right: 1px solid var(--pst-color-border);
+    padding-right: var(--saetass-spacing-sm);
+    margin-right: var(--saetass-spacing-sm);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §10b  NOTEBOOK PROMPT RESET (Prevents prompt labels from looking like code)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.prompt.highlight-none.notranslate,
+.prompt .highlight,
+.prompt pre {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: auto !important;
+}
+
+.prompt pre {
+    /* Aligns the [1]: text properly */
+    padding-top: 0.8rem !important;
+    color: var(--pst-color-text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §11  ADMONITIONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.admonition {
+    border-radius: var(--saetass-radius-md);
+    border: 1px solid var(--pst-color-border-muted);
+    border-left-width: 4px;
+    box-shadow: var(--saetass-shadow-sm);
+    margin-top: var(--saetass-spacing-md);
+    margin-bottom: var(--saetass-spacing-md);
+    overflow: hidden;
+}
+
+.admonition>.admonition-title {
+    font-weight: var(--saetass-font-weight-semibold);
+    font-size: var(--saetass-font-size-sm);
+}
+
+/* ── Per-type border colors ──────────────────────────────────────────────── */
+
+.admonition.note,
+.admonition.seealso {
+    border-left-color: var(--pst-color-info);
+}
+
+.admonition.tip,
+.admonition.hint {
+    border-left-color: var(--pst-color-success);
+}
+
+.admonition.important {
+    border-left-color: var(--pst-color-primary);
+}
+
+.admonition.warning,
+.admonition.caution,
+.admonition.attention {
+    border-left-color: var(--pst-color-warning);
+}
+
+.admonition.danger,
+.admonition.error {
+    border-left-color: var(--pst-color-danger);
+}
+
+.admonition.todo {
+    border-left-color: var(--pst-color-secondary);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §12  TABLES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-content table {
+    border-radius: var(--saetass-radius-md);
+    overflow: hidden;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+}
+
+.bd-content table thead th {
+    background-color: var(--pst-color-table-heading-bg);
+    color: var(--pst-color-heading);
+    font-weight: var(--saetass-font-weight-semibold);
+    font-size: var(--saetass-font-size-sm);
+    border-bottom: 2px solid var(--pst-color-border);
+}
+
+.bd-content table tbody td {
+    border-bottom: 1px solid var(--pst-color-table-inner-border);
+    font-size: var(--saetass-font-size-sm);
+}
+
+.bd-content table tbody tr:hover {
+    background-color: var(--pst-color-table-row-hover-bg);
+}
+
+.bd-content table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Responsive table scroll wrapper */
+.table-responsive,
+.bd-content table {
+    overflow-x: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §13  SPHINX-DESIGN CARDS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.sd-card {
+    border: 1px solid var(--pst-color-border);
+    border-radius: var(--saetass-radius-lg);
+    background-color: var(--pst-color-on-background);
+    box-shadow: var(--saetass-shadow-sm);
+    transition: box-shadow var(--saetass-transition-base),
+        transform var(--saetass-transition-base);
+    overflow: hidden;
+}
+
+.sd-card:hover {
+    box-shadow: var(--saetass-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.sd-card .sd-card-header {
+    border-bottom: 1px solid var(--pst-color-border-muted);
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+.sd-card .sd-card-body {
+    color: var(--pst-color-text-base);
+    font-size: var(--saetass-font-size-sm);
+}
+
+.sd-card .sd-card-title {
+    color: var(--pst-color-heading);
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+.sd-card .sd-card-footer {
+    border-top: 1px solid var(--pst-color-border-muted);
+    font-size: var(--saetass-font-size-xs);
+    color: var(--pst-color-text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §14  SPHINX-TABS  (bridge pydata theme's data-theme with sphinx-tabs)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Light mode ─────────────────────────────────────────────────────────── */
+
+html[data-theme="light"] .sphinx-tabs-tab {
+    color: var(--saetass-blue-600);
+    background-color: transparent;
+    font-weight: var(--saetass-font-weight-medium);
+    transition: color var(--saetass-transition-base),
+        background-color var(--saetass-transition-base);
+}
+
+html[data-theme="light"] .sphinx-tabs-tab[aria-selected="true"] {
+    color: var(--saetass-blue-700);
+    font-weight: var(--saetass-font-weight-bold);
+    background-color: var(--pst-color-on-background);
+    border: 1px solid var(--saetass-grey-400);
+    border-bottom-color: var(--pst-color-on-background);
+}
+
+html[data-theme="light"] .sphinx-tabs-tab:hover:not([aria-selected="true"]) {
+    color: var(--saetass-orange-500);
+    background-color: var(--saetass-blue-50);
+}
+
+html[data-theme="light"] .sphinx-tabs-panel {
+    color: inherit;
+    background-color: var(--pst-color-on-background);
+    border-color: var(--saetass-grey-400);
+    border-radius: 0 0 var(--saetass-radius-md) var(--saetass-radius-md);
+}
+
+html[data-theme="light"] [role="tablist"] {
+    border-bottom-color: var(--saetass-grey-400);
+}
+
+/* ── Dark mode ──────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] .sphinx-tabs-tab {
+    color: var(--saetass-neutral-300);
+    background-color: rgba(255, 255, 255, 0.04);
+    font-weight: var(--saetass-font-weight-medium);
+    transition: color var(--saetass-transition-base),
+        background-color var(--saetass-transition-base);
+}
+
+html[data-theme="dark"] .sphinx-tabs-tab[aria-selected="true"] {
+    color: var(--saetass-neutral-100);
+    font-weight: var(--saetass-font-weight-bold);
+    background-color: var(--saetass-neutral-900);
+    border: 1px solid var(--saetass-neutral-600);
+    border-bottom-color: var(--saetass-neutral-900);
+}
+
+html[data-theme="dark"] .sphinx-tabs-tab:hover:not([aria-selected="true"]) {
+    color: var(--saetass-orange-300);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .sphinx-tabs-panel {
+    color: var(--saetass-neutral-200);
+    background-color: var(--saetass-neutral-900);
+    border-color: var(--saetass-neutral-600);
+    border-radius: 0 0 var(--saetass-radius-md) var(--saetass-radius-md);
+}
+
+html[data-theme="dark"] [role="tablist"] {
+    border-bottom-color: var(--saetass-neutral-600);
+}
+
+/* ── Auto mode: follow the OS preference ────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] .sphinx-tabs-tab {
+        color: var(--saetass-neutral-300);
+        background-color: rgba(255, 255, 255, 0.04);
+        font-weight: var(--saetass-font-weight-medium);
+    }
+
+    html[data-theme="auto"] .sphinx-tabs-tab[aria-selected="true"] {
+        color: var(--saetass-neutral-100);
+        font-weight: var(--saetass-font-weight-bold);
+        background-color: var(--saetass-neutral-900);
+        border: 1px solid var(--saetass-neutral-600);
+        border-bottom-color: var(--saetass-neutral-900);
+    }
+
+    html[data-theme="auto"] .sphinx-tabs-tab:hover:not([aria-selected="true"]) {
+        color: var(--saetass-orange-300);
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    html[data-theme="auto"] .sphinx-tabs-panel {
+        color: var(--saetass-neutral-200);
+        background-color: var(--saetass-neutral-900);
+        border-color: var(--saetass-neutral-600);
+        border-radius: 0 0 var(--saetass-radius-md) var(--saetass-radius-md);
+    }
+
+    html[data-theme="auto"] [role="tablist"] {
+        border-bottom-color: var(--saetass-neutral-600);
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §15  SEARCH
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-search .form-control,
+.search-button__default-text {
+    font-family: var(--saetass-font-family-base);
+}
+
+.bd-search input[type="search"] {
+    border: 1px solid var(--pst-color-border);
+    border-radius: var(--saetass-radius-md);
+    background-color: var(--pst-color-surface);
+    color: var(--pst-color-text-base);
+    transition: border-color var(--saetass-transition-base),
+        box-shadow var(--saetass-transition-base);
+}
+
+.bd-search input[type="search"]:focus {
+    border-color: var(--pst-color-primary);
+    box-shadow: var(--saetass-focus-ring);
+    outline: none;
+}
+
+/* Search result highlight */
+.bd-content .highlighted {
+    background-color: var(--pst-color-target);
+    padding: 0.1em 0.2em;
+    border-radius: var(--saetass-radius-xs);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §16  FOOTER
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-footer {
+    background-color: var(--pst-color-on-background);
+    border-top: 1px solid var(--pst-color-border);
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-sm);
+}
+
+.bd-footer a {
+    color: var(--pst-color-link);
+    transition: color var(--saetass-transition-base);
+}
+
+.bd-footer a:hover {
+    color: var(--pst-color-link-hover);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §17  BREADCRUMBS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.breadcrumb {
+    font-size: var(--saetass-font-size-sm);
+    color: var(--pst-color-text-muted);
+}
+
+.breadcrumb a {
+    color: var(--pst-color-text-muted);
+    transition: color var(--saetass-transition-base);
+}
+
+.breadcrumb a:hover {
+    color: var(--pst-color-primary);
+}
+
+.breadcrumb .breadcrumb-item.active {
+    color: var(--pst-color-text-base);
+    font-weight: var(--saetass-font-weight-medium);
+}
+
+.breadcrumb-item+.breadcrumb-item::before {
+    color: var(--pst-color-text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §18  VERSION / ANNOUNCEMENT BANNER
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-header-announcement {
+    background-color: var(--saetass-brand-orange);
+    color: #FFFFFF;
+    font-weight: var(--saetass-font-weight-medium);
+    font-size: var(--saetass-font-size-sm);
+}
+
+.bd-header-announcement a {
+    color: #FFFFFF;
+    text-decoration: underline;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §19  MATHJAX
+   ───────────────────────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] .MathJax,
+html[data-theme="dark"] .MathJax_SVG * {
+    fill: var(--pst-color-text-base) !important;
+    color: var(--pst-color-text-base) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+
+    html[data-theme="auto"] .MathJax,
+    html[data-theme="auto"] .MathJax_SVG * {
+        fill: var(--pst-color-text-base) !important;
+        color: var(--pst-color-text-base) !important;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §20  BUTTONS & BADGES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.btn-primary,
+.sd-btn-primary {
+    background-color: var(--pst-color-primary);
+    border-color: var(--pst-color-primary);
+    color: #FFFFFF;
+    border-radius: var(--saetass-radius-md);
+    font-weight: var(--saetass-font-weight-medium);
+    transition: background-color var(--saetass-transition-base),
+        box-shadow var(--saetass-transition-base);
+}
+
+.btn-primary:hover,
+.sd-btn-primary:hover {
+    background-color: var(--saetass-blue-700);
+    border-color: var(--saetass-blue-700);
+    box-shadow: var(--saetass-shadow-md);
+}
+
+.btn-secondary,
+.sd-btn-secondary {
+    background-color: transparent;
+    border: 1px solid var(--pst-color-primary);
+    color: var(--pst-color-primary);
+    border-radius: var(--saetass-radius-md);
+    font-weight: var(--saetass-font-weight-medium);
+    transition: background-color var(--saetass-transition-base),
+        color var(--saetass-transition-base);
+}
+
+.btn-secondary:hover,
+.sd-btn-secondary:hover {
+    background-color: var(--pst-color-primary);
+    color: #FFFFFF;
+}
+
+/* Sphinx-design outline badges */
+.sd-badge {
+    border-radius: var(--saetass-radius-xl);
+    font-size: var(--saetass-font-size-xs);
+    font-weight: var(--saetass-font-weight-medium);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §21  SCROLLBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: var(--saetass-neutral-50);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background-color: var(--saetass-neutral-300);
+    border-radius: var(--saetass-radius-xl);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--saetass-neutral-400);
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--saetass-neutral-900);
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background-color: var(--saetass-neutral-600);
+    border-radius: var(--saetass-radius-xl);
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--saetass-neutral-500);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+}
+
+html[data-theme="light"] {
+    scrollbar-color: var(--saetass-neutral-300) var(--saetass-neutral-50);
+}
+
+html[data-theme="dark"] {
+    scrollbar-color: var(--saetass-neutral-600) var(--saetass-neutral-900);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §22  SELECTION / HIGHLIGHT
+   ───────────────────────────────────────────────────────────────────────────── */
+
+::selection {
+    background-color: var(--saetass-blue-200);
+    color: var(--saetass-neutral-900);
+}
+
+html[data-theme="dark"] ::selection {
+    background-color: var(--saetass-blue-800);
+    color: var(--saetass-neutral-100);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §23  FOCUS / ACCESSIBILITY
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:focus-visible {
+    outline: 2px solid var(--pst-color-primary);
+    outline-offset: 2px;
+    border-radius: var(--saetass-radius-xs);
+}
+
+a:focus-visible {
+    box-shadow: var(--saetass-focus-ring);
+    border-radius: var(--saetass-radius-xs);
+    outline: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §24  PRINT
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@media print {
+
+    .bd-sidebar-primary,
+    .bd-sidebar-secondary,
+    .bd-header,
+    .bd-footer,
+    .headerlink,
+    .prev-next-area {
+        display: none !important;
+    }
+
+    body {
+        color: #000000 !important;
+        background: #FFFFFF !important;
+        font-size: 11pt;
+    }
+
+    a {
+        color: #000000 !important;
+        text-decoration: underline;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        color: #000000 !important;
+        page-break-after: avoid;
+    }
+
+    pre,
+    code,
+    .highlight {
+        border: 1px solid #CCCCCC;
+        background: #F5F5F5 !important;
+        page-break-inside: avoid;
+    }
+
+    .admonition {
+        page-break-inside: avoid;
+    }
+
+    table {
+        page-break-inside: avoid;
+    }
+
+    img {
+        max-width: 100% !important;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §25  MISCELLANEOUS EDGE CASES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Logo ────────────────────────────────────────────────────────────────── */
+
+img.logo {
+    display: block;
+    margin: 0 auto;
+    height: auto;
+    width: 100%;
+    max-width: 100%;
+    background: transparent;
+    border-radius: 0;
+}
+
+/* ── Prev / Next navigation ──────────────────────────────────────────────── */
+
+.prev-next-area a {
+    color: var(--pst-color-primary);
+    border: 1px solid var(--pst-color-border);
+    border-radius: var(--saetass-radius-md);
+    padding: var(--saetass-spacing-sm) var(--saetass-spacing-md);
+    transition: border-color var(--saetass-transition-base),
+        box-shadow var(--saetass-transition-base),
+        background-color var(--saetass-transition-base);
+}
+
+.prev-next-area a:hover {
+    border-color: var(--pst-color-primary);
+    background-color: var(--pst-color-primary-bg);
+    box-shadow: var(--saetass-shadow-sm);
+}
+
+.prev-next-area .prev-next-title {
+    color: var(--pst-color-text-base);
+    font-weight: var(--saetass-font-weight-medium);
+}
+
+.prev-next-area .prev-next-subtitle {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-xs);
+}
+
+/* ── Back-to-top button ──────────────────────────────────────────────────── */
+
+#pst-back-to-top {
+    background-color: var(--pst-color-primary);
+    color: #FFFFFF;
+    border-radius: var(--saetass-radius-xl);
+    box-shadow: var(--saetass-shadow-md);
+    transition: background-color var(--saetass-transition-base),
+        box-shadow var(--saetass-transition-base);
+}
+
+#pst-back-to-top:hover {
+    background-color: var(--saetass-blue-700);
+    box-shadow: var(--saetass-shadow-lg);
+}
+
+/* ── Footnotes / Citations ───────────────────────────────────────────────── */
+
+.footnote-reference,
+.citation-reference {
+    color: var(--pst-color-primary);
+    font-weight: var(--saetass-font-weight-medium);
+    font-size: var(--saetass-font-size-xs);
+    vertical-align: super;
+}
+
+aside.footnote,
+aside.citation {
+    border-left: 3px solid var(--pst-color-border);
+    padding-left: var(--saetass-spacing-md);
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-sm);
+}
+
+/* ── Definition Lists ────────────────────────────────────────────────────── */
+
+dl {
+    margin-bottom: var(--saetass-spacing-md);
+}
+
+dt {
+    color: var(--pst-color-heading);
+    font-weight: var(--saetass-font-weight-semibold);
+    margin-top: var(--saetass-spacing-sm);
+}
+
+dd {
+    margin-left: var(--saetass-spacing-lg);
+    color: var(--pst-color-text-base);
+}
+
+/* ── Field Lists (autodoc parameter tables) ──────────────────────────────── */
+
+.field-list dt {
+    font-weight: var(--saetass-font-weight-semibold);
+    color: var(--pst-color-heading);
+}
+
+.field-list dd {
+    margin-bottom: var(--saetass-spacing-sm);
+}
+
+/* ── Rubric Headings ─────────────────────────────────────────────────────── */
+
+p.rubric {
+    color: var(--pst-color-heading);
+    font-weight: var(--saetass-font-weight-bold);
+    font-size: var(--saetass-font-size-lg);
+    border-bottom: 1px solid var(--pst-color-border);
+    padding-bottom: var(--saetass-spacing-xs);
+    margin-top: var(--saetass-spacing-xl);
+}
+
+/* ── Topic / Container Directives ────────────────────────────────────────── */
+
+.topic {
+    background-color: var(--pst-color-surface);
+    border: 1px solid var(--pst-color-border);
+    border-radius: var(--saetass-radius-md);
+    padding: var(--saetass-spacing-md);
+}
+
+.topic .topic-title {
+    color: var(--pst-color-heading);
+    font-weight: var(--saetass-font-weight-semibold);
+}
+
+.container {
+    padding: var(--saetass-spacing-md);
+}
+
+/* ── Blockquotes ─────────────────────────────────────────────────────────── */
+
+blockquote {
+    border-left: 4px solid var(--pst-color-blockquote-notch);
+    padding-left: var(--saetass-spacing-md);
+    color: var(--pst-color-text-muted);
+    font-style: italic;
+    margin: var(--saetass-spacing-md) 0;
+}
+
+/* ── Figure Captions ─────────────────────────────────────────────────────── */
+
+figcaption,
+.caption-text {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-sm);
+    font-style: italic;
+    text-align: center;
+    margin-top: var(--saetass-spacing-xs);
+}
+
+/* ── Download Links ──────────────────────────────────────────────────────── */
+
+a.download {
+    color: var(--pst-color-primary);
+    font-weight: var(--saetass-font-weight-medium);
+}
+
+a.download:hover {
+    color: var(--pst-color-link-hover);
+}
+
+a.download code {
+    color: inherit;
+}
+
+/* ── Viewcode ([source] link) ────────────────────────────────────────────── */
+
+a.reference.internal .viewcode-link {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-xs);
+    font-weight: var(--saetass-font-weight-medium);
+    margin-left: var(--saetass-spacing-xs);
+}
+
+a.reference.internal .viewcode-link:hover {
+    color: var(--pst-color-primary);
+}
+
+.viewcode-back {
+    color: var(--pst-color-text-muted);
+    font-size: var(--saetass-font-size-sm);
+}
+
+/* ── Deprecated / Versionadded / Versionchanged Directives ───────────────── */
+
+.deprecated,
+.versionadded,
+.versionchanged,
+.versionremoved {
+    font-size: var(--saetass-font-size-sm);
+    font-style: italic;
+    color: var(--pst-color-text-muted);
+    padding: var(--saetass-spacing-xs) 0;
+}
+
+.deprecated .versionmodified,
+.versionadded .versionmodified,
+.versionchanged .versionmodified,
+.versionremoved .versionmodified {
+    font-weight: var(--saetass-font-weight-semibold);
+    color: var(--pst-color-text-base);
+}
+
+/* ── Guilabel / Menuselection / Keyboard shortcuts ───────────────────────── */
+
+.guilabel,
+.menuselection {
+    font-weight: var(--saetass-font-weight-medium);
+    font-size: var(--saetass-font-size-sm);
+    color: var(--pst-color-text-base);
+    border: 1px solid var(--pst-color-border);
+    border-radius: var(--saetass-radius-sm);
+    padding: 0.1em 0.4em;
+    background-color: var(--pst-color-surface);
+}
+
+kbd {
+    font-family: var(--saetass-font-family-mono);
+    font-size: var(--saetass-font-size-xs);
+    color: var(--pst-color-text-base);
+    background-color: var(--pst-color-surface);
+    border: 1px solid var(--pst-color-border);
+    border-bottom-width: 2px;
+    border-radius: var(--saetass-radius-sm);
+    padding: 0.1em 0.4em;
+    box-shadow: var(--saetass-shadow-sm);
+}
+
+/* ── Autodoc Signatures ──────────────────────────────────────────────────── */
+
+.sig,
+.sig-name {
+    font-family: var(--saetass-font-family-mono);
+}
+
+.sig-name.descname {
+    font-weight: var(--saetass-font-weight-bold);
+    color: var(--pst-color-primary);
+}
+
+.sig-param {
+    font-style: italic;
+}
+
+.sig-paren {
+    font-weight: var(--saetass-font-weight-normal);
+}
+
+/* ── API object descriptions (dl.py) ─────────────────────────────────────── */
+
+dl.py dt,
+dl.class dt,
+dl.method dt,
+dl.function dt,
+dl.attribute dt {
+    background-color: var(--pst-color-surface);
+    border-left: 3px solid var(--pst-color-primary);
+    padding: var(--saetass-spacing-xs) var(--saetass-spacing-sm);
+    border-radius: 0 var(--saetass-radius-sm) var(--saetass-radius-sm) 0;
+    margin-bottom: var(--saetass-spacing-xs);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §26  DARK TERMINAL OUTPUT (Force dark background for console outputs)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Target the output container and its preformatted text */
+.nboutput.container .output_area pre,
+.nboutput.container .output_area .highlight pre {
+    background-color: #1b1d24 !important;
+    /* SAETASS Neutral 900 (Very Dark) */
+    color: #eeeeee !important;
+    /* Off-white text */
+    padding: var(--saetass-spacing-md) !important;
+    border-radius: var(--saetass-radius-md) !important;
+    border: 1px solid var(--saetass-neutral-800) !important;
+
+    /* Terminal styling */
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5) !important;
+    font-family: var(--saetass-font-family-mono) !important;
+    line-height: 1.4 !important;
+
+    /* Ensure colors from 'rich' or ANSI are readable */
+    text-shadow: none !important;
+}
+
+/* Force specific colors in the banner to pop against the dark background */
+.nboutput.container .output_area span {
+    /* If the inline styles are too dark, this ensures they are visible,
+       but usually ANSI colors look perfect on Neutral 900 */
+    opacity: 1 !important;
+}
+
+/* Optional: Make the scrollbar for these terminal boxes more subtle */
+.nboutput.container .output_area pre::-webkit-scrollbar-thumb {
+    background-color: var(--saetass-neutral-600) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §27  DEACTIVATE DEFAULT NBOUTPUT BOXES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Target the exact selector you found to override its defaults */
+html[data-theme=dark] .bd-content .nboutput .output_area .widget-subarea,
+html[data-theme=dark] .bd-content .nboutput .output_area.rendered_html:not(:has(table.dataframe)) {
+    background-color: transparent !important;
+    /* Remove that forced background */
+    border: none !important;
+    /* Kill the border */
+    padding: 0 !important;
+    /* Remove the forced padding */
+    color: inherit !important;
+    /* Let it use the page/terminal color */
+    box-shadow: none !important;
+    /* Just in case there's a shadow hidden there */
+}
+
+/* Also apply to light mode just in case it appears there too */
+.bd-content .nboutput .output_area .widget-subarea,
+.bd-content .nboutput .output_area.rendered_html:not(:has(table.dataframe)) {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §28  NBSPHINX RESET (Neutralizing Default Styles)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* 1. Fix the Input Area (The Code Box) */
+div.nbinput.container div.input_area {
+    border: 1px solid var(--pst-color-border-muted) !important;
+    border-radius: var(--saetass-radius-md) !important;
+    background: var(--pst-color-surface) !important;
+    padding: 0 !important;
+    /* Let the internal highlight handle padding */
+}
+
+/* 2. Fix the Prompt Area ([1]:) */
+div.nbinput.container div.prompt,
+div.nboutput.container div.prompt {
+    /* Resetting the default nbsphinx width/padding */
+    width: 65px !important;
+    min-width: 65px !important;
+    padding-top: 0.8rem !important;
+
+    /* Re-enabling selection if you want to be able to copy the [1] */
+    user-select: auto !important;
+
+    /* Aesthetics */
+    font-size: var(--saetass-font-size-xs) !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* 3. Dark Mode Specificity Fix */
+/* This prevents the theme from forcing a white background in dark mode */
+html[data-theme="dark"] div.nbinput.container div.input_area {
+    background: var(--saetass-neutral-900) !important;
+    border-color: var(--saetass-neutral-700) !important;
+}
+
+/* 4. Remove the default nbsphinx shadow/border on output images/widgets */
+.nboutput.container .output_area.rendered_html,
+.nboutput.container .output_area img {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Completely hide the prompt div */
+.nbinput.container div.prompt,
+.nboutput.container div.prompt {
+    display: none !important;
+}
+
+/* Re-align the code area to use the full width now that the prompt is gone */
+.nbinput.container div.input_area,
+.nboutput.container div.output_area {
+    width: 100% !important;
+    margin-left: 0 !important;
+}
+
+/* Optional: Add a tiny bit of left padding to the code so it's not
+   glued to the very edge of the container */
+.nbinput.container div.input_area pre {
+    padding-left: var(--saetass-spacing-md) !important;
+}

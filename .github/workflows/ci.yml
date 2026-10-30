@@ -1,0 +1,81 @@
+name: CI (Tests & Linting)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pytest-benchmark 5.3.0 fails on pytest 9.2 (ionelmc/pytest-benchmark#321):
+          # remove the constraint once a release supports it
+          pip install -e ".[test,lint]" "pytest<9.2"
+
+      - name: Check style with Ruff
+        run: ruff check . && ruff format --check .
+
+      - name: Run tests with Coverage
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
+        env:
+          NUMBA_NUM_THREADS: 1
+        run: pytest --cov=saetass --cov-report=xml
+
+      - name: Run the kernels in parallel
+        # Every kernel call forced onto several threads must reproduce the serial runs
+        env:
+          NUMBA_NUM_THREADS: 4
+        run: pytest test/test_parallel.py
+
+      - name: Check that the benchmarks run
+        # Only once each: timings on shared runners are too noisy to compare
+        env:
+          NUMBA_NUM_THREADS: 1
+        run: pytest benchmarks --benchmark-disable
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  package:
+    name: Built package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv and a virtual environment
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+          activate-environment: true
+
+      - name: Build the source distribution and the wheel
+        # uv builds the wheel from the source distribution, so both must be complete
+        run: uv build
+
+      - name: Install the wheel with its test dependencies
+        run: uv pip install "$(ls dist/*.whl)[test]"
+
+      - name: Run tests against the installed package
+        # Without the source tree, the tests can only import the installed package
+        env:
+          NUMBA_NUM_THREADS: 1
+        run: |
+          rm -rf src
+          python -c "import saetass; print(saetass.__file__)"
+          python -m pytest

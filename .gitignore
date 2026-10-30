@@ -1,4 +1,71 @@
+# =========================================================
+# Python cache and compiled files
+# =========================================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+.coverage
+
+# =========================================================
+# Virtual environments
+# =========================================================
+.venv/
+venv/
+env/
+
+# =========================================================
+# IDE / Editor settings
+# =========================================================
+.vscode/
+
+# macOS system files
+.DS_Store
+
+# =========================================================
+# Project output files
+# =========================================================
+outputs/
+examples/outputs/
+
+# Simulation / computation outputs
 *.png
-GiovanniConv/
-__pycache__/*
-.vscode/*
+*.out
+*.npz
+*.pkl
+
+# Exception: track documentation assets and test datasets
+!docs/assets/*.png
+!docs/assets/*.gif
+!docs/assets/*.svg
+!test/data/*.npz
+
+# =========================================================
+# Temporary / scratch files
+# =========================================================
+untitled*
+test/debug/
+
+# =========================================================
+# Private or local development folders
+# =========================================================
+_private/
+
+# Testing scripts (not part of main codebase)
+testing_scripts/
+
+# =========================================================
+# Users and developers AI agent instruction files
+# =========================================================
+AGENTS.md
+CLAUDE.md
+
+# =========================================================
+# Benchmark results, which depend on the machine
+# =========================================================
+.benchmarks/

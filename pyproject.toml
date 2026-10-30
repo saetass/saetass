@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "saetass"
+dynamic = ["version"]
+description = "A scientific computing package for solving astroparticle transport equation using operator splitting methods and a finite volume approach."
+readme = "README.md"
+license = {text = "BSD 3-Clause"}
+authors = [
+    {name = "J. M. García-Morillo", email = "jmorillo@iaa.es"}
+]
+requires-python = ">=3.11"
+# Each minimum version is the oldest one that works, checked by the "Dependency versions"
+# workflow, which installs the lowest allowed version of every direct dependency
+dependencies = [
+    "numpy>=2.0.0",  # numpy.trapezoid
+    "scipy>=1.13.0",  # the first release built for numpy 2
+    "astropy>=6.1.0",  # the first release built for numpy 2
+    "numba>=0.60.0",  # the first release built for numpy 2
+    "rich>=12.0.0",  # rich.progress.MofNCompleteColumn
+    "aafragpy>=2.0",  # earlier releases tabulate different cross sections
+]
+
+[project.optional-dependencies]
+tutorials = [
+    "matplotlib>=3.8.4",  # the first release that supports numpy 2
+    "rich[jupyter]>=12.0.0",  # the widgets of the progress bar in notebooks
+    "ipykernel>=6.0.2",  # 5.x is incompatible with recent IPython
+]
+test = [
+    "pytest>=7.0.0",  # the pythonpath option
+    "pytest-cov>=2.3.1",
+    "pytest-benchmark>=4.0.0",  # 3.x fails on pytest 8
+    "naima>=0.10.1",  # 0.10.0 imports pkg_resources without depending on setuptools
+]
+docs = [
+    "sphinx>=5.0.0",
+    "pydata-sphinx-theme>=0.7.2",
+    "nbsphinx>=0.8.9",  # 0.8.8 fails to render the outputs of the tutorials
+    "sphinx-tabs>=3.4.4",  # 3.4.1 imports pkg_resources without depending on setuptools
+    "myst-parser>=0.18.0",
+    "sphinxcontrib-bibtex>=2.5.0",  # 2.4.2 imports pkg_resources without depending on setuptools
+    "sphinx-design>=0.2.0",
+    "ipython>=7.6.0",  # the syntax highlighting of the notebooks
+]
+lint = [
+    "ruff==0.15.9",  # the version of the pre-commit hook
+]
+dev = [
+    "saetass[tutorials,test,docs,lint]",
+    "pre-commit>=3.2.0",  # the minimum version required by the hooks
+]
+
+[project.urls]
+Homepage = "https://github.com/saetass/saetass"
+Repository = "https://github.com/saetass/saetass.git"
+Documentation = "https://saetass.readthedocs.io/"
+Changelog = "https://github.com/saetass/saetass/blob/main/CHANGELOG.md"
+
+# --- SPECIFIC CONFIGURATION FOR HATCH ---
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/saetass"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["test"]
+addopts = "-ra"
+filterwarnings = [
+    "ignore:.*Conversion of an array with ndim > 0 to a scalar is deprecated.*:DeprecationWarning:aafragpy.*",
+    "ignore:.*LUT .* not found, reverting to useLUT = False.*:UserWarning:naima.*",
+]
+
+# --- RUFF CONFIGURATION ---
+
+[tool.ruff]
+src = ["src"]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+# select = ["E", "F", "I", "N", "UP", "D", "B", "NPY"]
+ignore = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = ["saetass"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

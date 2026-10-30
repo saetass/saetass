@@ -1,0 +1,136 @@
+name: Dependency versions
+
+# The minimum versions declared in pyproject.toml are only true if something installs
+# them: each job resolves every direct dependency to its lowest allowed version
+# (uv --resolution lowest-direct) and checks that the package still works with it.
+# The newest versions are tested on every supported Python, and on macOS and Windows.
+# The workflow also runs weekly, so that a new release of a dependency that breaks
+# the package is noticed even without new commits.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.versions }} versions, Python ${{ matrix.python }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A Python version released recently is tested before all the test dependencies
+    # support it, without blocking the workflow
+    continue-on-error: ${{ matrix.experimental == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { versions: oldest, os: ubuntu-latest, python: "3.11", resolution: lowest-direct }
+          - { versions: newest, os: ubuntu-latest, python: "3.11", resolution: highest }
+          - { versions: newest, os: ubuntu-latest, python: "3.12", resolution: highest }
+          - { versions: newest, os: ubuntu-latest, python: "3.13", resolution: highest }
+          - { versions: newest, os: ubuntu-latest, python: "3.14", resolution: highest }
+          - { versions: newest, os: ubuntu-latest, python: "3.15", resolution: highest, experimental: true }
+          - { versions: newest, os: macos-latest, python: "3.11", resolution: highest }
+          - { versions: newest, os: macos-latest, python: "3.14", resolution: highest }
+          - { versions: newest, os: windows-latest, python: "3.11", resolution: highest }
+          - { versions: newest, os: windows-latest, python: "3.14", resolution: highest }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv and a virtual environment
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: ${{ matrix.python }}
+          activate-environment: true
+
+      - name: Install HDF5
+        # naima needs h5py, which may not have wheels yet for a recent Python
+        if: matrix.experimental
+        run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
+
+      - name: Install the package with its test dependencies
+        run: |
+          uv pip install --resolution ${{ matrix.resolution }} ".[test]"
+          uv pip list
+
+      - name: Run tests
+        # Serial kernels keep the duration of the tests independent of the load of
+        # the shared runner; test_parallel.py runs them on several threads
+        env:
+          NUMBA_NUM_THREADS: 1
+        run: python -m pytest
+
+  docs:
+    name: Documentation (oldest versions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv and a virtual environment
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+          activate-environment: true
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Install the package with its documentation dependencies
+        run: |
+          uv pip install --resolution lowest-direct ".[docs]"
+          uv pip list
+
+      - name: Build the documentation
+        run: python -m sphinx -b html docs/source docs/_build/html
+
+  tutorials:
+    name: Tutorials (oldest versions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv and a virtual environment
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+          activate-environment: true
+
+      - name: Install LaTeX
+        # The energy losses tutorial typesets its figures with text.usetex
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-extra texlive-fonts-recommended dvipng cm-super
+
+      - name: Install the package with its tutorial dependencies
+        # nbclient only executes the notebooks, so it is installed at its newest version
+        run: |
+          uv pip install --resolution lowest-direct ".[tutorials]"
+          uv pip install nbclient
+          uv pip list
+          python -m ipykernel install --prefix "$VIRTUAL_ENV" --name saetass
+
+      - name: Execute the tutorials
+        working-directory: tutorials
+        env:
+          MPLBACKEND: Agg
+        run: |
+          export JUPYTER_PATH="$VIRTUAL_ENV/share/jupyter"
+          python - <<'EOF'
+          import glob
+
+          import nbformat
+          from nbclient import NotebookClient
+
+          for path in sorted(glob.glob("[0-9]*.ipynb")):
+              notebook = nbformat.read(path, as_version=4)
+              NotebookClient(
+                  notebook,
+                  kernel_name="saetass",
+                  timeout=1800,
+                  resources={"metadata": {"path": "."}},
+              ).execute()
+              print(f"Executed {path}")
+          EOF
