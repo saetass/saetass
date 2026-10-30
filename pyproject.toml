@@ -45,6 +45,9 @@ docs = [
     "sphinx-design>=0.2.0",
     "ipython>=7.6.0",  # the syntax highlighting of the notebooks
 ]
+pinn = [
+    "torch>=2.2.0",  # the first release with Python 3.12 wheels
+]
 lint = [
     "ruff==0.15.9",  # the version of the pre-commit hook
 ]
