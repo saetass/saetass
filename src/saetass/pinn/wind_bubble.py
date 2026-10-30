@@ -502,8 +502,10 @@ def log_steady_state(x: np.ndarray, bubble: DimensionlessBubble) -> np.ndarray:
     x = np.asarray(x, dtype=float)
     shock = steady_state(np.ones_like(x), bubble)
     wind = np.log(shock) - wind_exponent(np.minimum(x, 1.0), bubble)
+    # Rounding can leave the outer boundary, where the steady state vanishes, just outside
+    beyond = np.maximum(steady_state(x, bubble), 0.0)
     with np.errstate(divide="ignore"):
-        return np.where(x < 1.0, wind, np.log(steady_state(x, bubble)))
+        return np.where(x < 1.0, wind, np.log(beyond))
 
 
 def torch_log_steady_state(

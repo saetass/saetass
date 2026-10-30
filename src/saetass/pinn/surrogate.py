@@ -325,8 +325,8 @@ class WindBubbleSurrogate:
                 f"The surrogate was trained for delta = {self.delta:.4g}, not {scales.delta:.4g}."
             )
         radii = np.atleast_1d(r.to_value(su.LENGTH))
-        if np.any(radii < 0.0) or np.any(radii >= scales.r_max):
-            raise ValueError("The radii must lie in [0, r_max).")
+        if np.any(radii < 0.0) or np.any(radii > scales.r_max):
+            raise ValueError("The radii must lie in [0, r_max].")
         numbers = scales.dimensionless
         peclet = np.atleast_1d(numbers.peclet)[:, None]
         ratio = np.atleast_1d(numbers.diffusion_ratio)[:, None]

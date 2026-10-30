@@ -46,7 +46,11 @@ def summary(values: np.ndarray) -> dict:
 
 def test_set_errors(surrogate: WindBubbleSurrogate, path: str) -> dict:
     """Errors on the test set, against the reference solutions stored in it."""
-    tensors = Tensors(np.load(path), surrogate.delta, surrogate.device)
+    # Only the times of the domain of the surrogate: it refuses to evaluate the others
+    data = dict(np.load(path))
+    keep = data["log_times"] >= surrogate.time_bounds[0] - 1e-6
+    data["log_times"], data["w"] = data["log_times"][keep], data["w"][:, keep]
+    tensors = Tensors(data, surrogate.delta, surrogate.device)
     result = errors(surrogate.model, tensors)
     l2 = result["l2"].cpu().numpy()
     log_max = result["log_max"].cpu().numpy()

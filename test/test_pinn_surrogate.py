@@ -192,6 +192,14 @@ def test_surrogate_is_mesh_free_in_physical_units(surrogate):
     assert np.all(psi.value > 0.0)
 
 
+def test_surrogate_vanishes_at_the_outer_boundary(surrogate):
+    """The last cell center of a simulation is the Dirichlet boundary."""
+    r = np.linspace(0.0, 300.0, 601) * u.pc
+    psi = surrogate.psi_p(r, 1 * u.TeV, 1.5 * u.Myr, **PHYSICAL)
+    assert np.all(np.isfinite(psi.value))
+    assert psi[0, -1].value == 0.0
+
+
 def test_surrogate_rejects_parameters_outside_its_domain(surrogate):
     with pytest.raises(ValueError, match="Pe"):
         surrogate.dimensionless_psi(
