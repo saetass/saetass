@@ -22,10 +22,12 @@ from .dataset import zone_coordinate
 from .network import BubbleNetwork
 from .training import physics_residual
 from .wind_bubble import (
+    BatchedScales,
     DimensionlessBubble,
     PhysicalBubble,
     log_steady_state,
     physical_bubble,
+    torch_log_steady_state,
 )
 
 
@@ -199,6 +201,88 @@ class WindBubbleSurrogate:
         """
         w = self.log_ratio(x, times, bubble)
         return np.exp(w + log_steady_state(np.broadcast_to(x, w.shape), bubble))
+
+    def in_domain(self, scales: BatchedScales, times: torch.Tensor) -> torch.Tensor:
+        """
+        Whether a batch of bubbles and times lies inside the domain of the surrogate.
+
+        Parameters
+        ----------
+        scales : BatchedScales
+            Scales of the bubbles, as tensors.
+        times : torch.Tensor
+            Dimensionless times.
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean mask, broadcast from the inputs.
+        """
+        bounds = self.model.bounds
+        time_bounds = self.model.time_bounds
+        fields = (
+            scales.peclet,
+            scales.diffusion_ratio,
+            scales.bubble_ratio,
+            scales.domain_ratio,
+        )
+        inside = (torch.log(times) >= time_bounds[0]) & (
+            torch.log(times) <= time_bounds[1]
+        )
+        for index, field in enumerate(fields):
+            logarithm = torch.log(field)
+            inside = inside & (logarithm >= bounds[index, 0])
+            inside = inside & (logarithm <= bounds[index, 1])
+        return inside
+
+    def log_psi(
+        self, x: torch.Tensor, times: torch.Tensor, scales: BatchedScales
+    ) -> torch.Tensor:
+        r"""
+        Logarithm of the physical :math:`\psi`, differentiable and batched, for parameter searches.
+
+        This method does not check the domain, see :py:meth:`in_domain`.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Dimensionless radii.
+        times : torch.Tensor
+            Dimensionless times.
+        scales : BatchedScales
+            Scales of the bubbles, as tensors, for instance from :py:class:`~saetass.pinn.wind_bubble.FastScales`.
+
+        Returns
+        -------
+        torch.Tensor
+            :math:`\ln \psi` in canonical :py:data:`~saetass.units.PSI_P` units, broadcast from the inputs.
+        """
+        fields = (
+            scales.peclet,
+            scales.diffusion_ratio,
+            scales.bubble_ratio,
+            scales.domain_ratio,
+        )
+        x, times, *fields = torch.broadcast_tensors(x, times, *fields)
+        Pe, ratio, a, b = fields
+        outer = a * b
+        zeta = torch.where(
+            x < 1.0,
+            x,
+            torch.where(
+                x < a, 1.0 + (x - 1.0) / (a - 1.0), 2.0 + (x - a) / (outer - a)
+            ),
+        )
+        # The scales are in double precision, since physical inputs overflow single
+        # precision, and the network in the precision of its weights
+        dtype = self.model.bounds.dtype
+        theta = torch.stack([torch.log(field) for field in fields], dim=-1).to(dtype)
+        w = self.model(zeta.to(dtype), torch.log(times).to(dtype), theta).to(x.dtype)
+        return (
+            w
+            + torch_log_steady_state(x, Pe, ratio, a, outer, self.delta)
+            + (torch.log(scales.psi_unit))
+        )
 
     def psi_p(
         self,

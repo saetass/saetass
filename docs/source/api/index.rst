@@ -10,5 +10,6 @@ API Reference
     splitting
     diagnostics
     performance
+    pinn
     units
     utils

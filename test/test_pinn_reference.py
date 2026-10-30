@@ -5,11 +5,12 @@ import astropy.units as u
 import numpy as np
 import pytest
 
-from saetass import Grid, Particle, Solver, State
 from saetass import units as su
+from saetass.pinn.confirm import simulate
 from saetass.pinn.reference import reference_grid, solve
 from saetass.pinn.wind_bubble import (
     DimensionlessBubble,
+    FastScales,
     log_steady_state,
     physical_bubble,
     steady_state,
@@ -117,9 +118,52 @@ def test_physical_bubble_uses_the_profiles_of_the_calculator():
     assert wind == pytest.approx(D[0] / (scales.v_b * scales.R_TS))
 
 
+@pytest.mark.parametrize("model", ["kolmogorov", "kraichnan", "bohm"])
+@pytest.mark.parametrize(
+    "L_wind, M_dot, density, age, eta_B",
+    [
+        (2e38, 1e-4, 20.0, 3.0, 0.1),
+        (3e37, 8e-6, 1.5, 7.0, 0.02),
+        (1e39, 3e-4, 90.0, 1.2, 0.3),
+    ],
+)
+def test_fast_scales_match_the_calculator(model, L_wind, M_dot, density, age, eta_B):
+    p = np.array([3.0, 1e2, 1e5])
+    rho = (density * const.m_p / u.cm**3).to_value(u.g / u.cm**3)
+    exact = physical_bubble(
+        p * su.MOMENTUM,
+        L_wind=L_wind * u.erg / u.s,
+        M_dot=M_dot * const.M_sun / u.yr,
+        rho_0=rho * u.g / u.cm**3,
+        t_b=age * u.Myr,
+        r_max=2000 * u.pc,
+        E_max=1 * u.PeV,
+        eta_B=eta_B,
+        diffusion_model=model,
+    )
+    fast = FastScales(1 * u.PeV, diffusion_model=model)(
+        p, L_wind, M_dot, rho, age, 2000.0, eta_B=eta_B
+    )
+    numbers = exact.dimensionless
+    assert np.allclose(fast.peclet, numbers.peclet, rtol=1e-9)
+    assert np.allclose(fast.diffusion_ratio, numbers.diffusion_ratio, rtol=1e-9)
+    assert np.isclose(fast.bubble_ratio, numbers.bubble_ratio, rtol=1e-9)
+    assert np.isclose(fast.domain_ratio, numbers.domain_ratio, rtol=1e-9)
+    assert np.isclose(fast.R_TS, exact.R_TS, rtol=1e-9)
+    assert np.isclose(fast.time_unit, exact.time_unit, rtol=1e-9)
+    assert np.allclose(fast.psi_unit, exact.psi_unit, rtol=1e-6)
+
+
 def test_physical_bubble_rejects_a_domain_inside_the_bubble():
     with pytest.raises(ValueError, match="r_max"):
         physical_bubble(1 * u.GeV, r_max=10 * u.pc, E_max=1 * u.PeV, **PHYSICAL)
+
+
+def test_physical_bubble_rejects_a_core():
+    with pytest.raises(ValueError, match="R_c"):
+        physical_bubble(
+            1 * u.GeV, r_max=300 * u.pc, E_max=1 * u.PeV, R_c=1 * u.pc, **PHYSICAL
+        )
 
 
 def test_injection_does_not_depend_on_the_momenta_evaluated():
@@ -183,27 +227,10 @@ def test_solution_converges_at_second_order():
 def test_solution_agrees_with_the_solver():
     energy = 1e5 * u.GeV
     r = np.linspace(0.0, 300.0, 1200)
-    calculator = BubbleProfileCalculator(r_grid=r * u.pc, model="Morlino21", **PHYSICAL)
-    setup = calculator.get_all_profiles(energy, eta_B=0.1, eta_inj=0.1, E_max=1 * u.PeV)
     end = 0.3
-    grid = Grid(r_centers=r * u.pc, t_grid=np.linspace(0.0, end, 5000) * u.Myr)
-    parameters = {
-        "advection": {
-            "v_centers": setup["v_field"],
-            "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
-        },
-        "diffusion": {"D_values": setup["D_values"], "psi_end": 0.0 * su.PSI_P},
-        "source": {"source": setup["Q"]},
-    }
-    solver = Solver(
-        state=State(
-            psi_p=np.zeros(r.size) * su.PSI_P, grid=grid, particle=Particle.PROTON
-        ),
-        problem_type="advection-source-diffusion",
-        operator_params=parameters,
-        quiet=True,
-    )
-    psi = solver.run().psi_p.to_value(su.PSI_P)
+    psi = simulate(
+        r * u.pc, energy, end * u.Myr, 5000, E_max=1 * u.PeV, **PHYSICAL
+    ).to_value(su.PSI_P)
 
     scales = physical_bubble(energy, r_max=300 * u.pc, E_max=1 * u.PeV, **PHYSICAL)
     numbers = scales.dimensionless

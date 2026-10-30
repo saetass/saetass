@@ -67,6 +67,8 @@ html_theme_options = {
 }
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
+# The surrogates need PyTorch, an optional dependency
+autodoc_mock_imports = ["torch"]
 
 add_module_names = False
 

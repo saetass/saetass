@@ -23,6 +23,7 @@ from saetass.pinn.training import (  # noqa: E402
 from saetass.pinn.wind_bubble import (  # noqa: E402
     DELTA,
     DimensionlessBubble,
+    FastScales,
     log_steady_state,
     physical_bubble,
 )
@@ -86,7 +87,7 @@ def test_coefficients_of_the_residual_describe_the_solutions(bubble):
     )
     x = solution.x
     log_steady = log_steady_state(x, bubble)
-    with np.errstate(divide="ignore"):
+    with np.errstate(divide="ignore", invalid="ignore"):
         w = np.log(solution.psi) - log_steady
     w_t = (w[2] - w[0]) / (middle * (ratio - 1.0 / ratio))
 
@@ -218,6 +219,59 @@ def test_surrogate_reports_the_residual(surrogate):
     residual = surrogate.residual(np.linspace(0.2, 15.0, 30), 10.0, bubble)
     assert residual.shape == (30,)
     assert np.all(np.isfinite(residual))
+
+
+def _double(values):
+    return torch.as_tensor(values, dtype=torch.float64)
+
+
+def test_batched_evaluation_matches_the_physical_interface(surrogate):
+    fast = FastScales(1 * u.PeV)
+    p = _double([[10.0], [1e3]])
+    L_wind, M_dot = _double(2e38), _double(1e-4)
+    rho = _double((20 * const.m_p / u.cm**3).to_value(u.g / u.cm**3))
+    scales = fast(p, L_wind, M_dot, rho, _double(3.0), _double(300.0))
+    r = np.array([5.0, 17.3, 41.0, 250.0])
+    times = 1.5 / scales.time_unit
+    x = _double(r) / scales.R_TS
+    assert surrogate.in_domain(scales, times).all()
+    log_psi = surrogate.log_psi(x, times, scales)
+    exact = surrogate.psi_p(
+        r * u.pc, p.numpy()[:, 0] * su.MOMENTUM, 1.5 * u.Myr, **PHYSICAL
+    )
+    assert np.allclose(log_psi.detach().numpy(), np.log(exact.value), atol=1e-3)
+
+
+def test_batched_evaluation_is_differentiable(surrogate):
+    fast = FastScales(1 * u.PeV)
+    L_wind = _double(2e38).requires_grad_()
+    rho = _double((20 * const.m_p / u.cm**3).to_value(u.g / u.cm**3))
+    scales = fast(
+        _double(100.0),
+        L_wind,
+        _double(1e-4),
+        rho,
+        _double(3.0),
+        _double(300.0),
+    )
+    x = _double([0.5, 2.0, 30.0])
+    surrogate.log_psi(x, 2.0 / scales.time_unit, scales).sum().backward()
+    assert torch.isfinite(L_wind.grad) and L_wind.grad != 0.0
+
+
+def test_domain_mask(surrogate):
+    fast = FastScales(1 * u.PeV)
+    rho = _double((20 * const.m_p / u.cm**3).to_value(u.g / u.cm**3))
+    scales = fast(
+        _double([1e3, 1e-3]),
+        _double(2e38),
+        _double(1e-4),
+        rho,
+        _double(3.0),
+        _double(300.0),
+    )
+    mask = surrogate.in_domain(scales, 2.0 / scales.time_unit)
+    assert mask.tolist() == [True, False]
 
 
 def test_surrogate_is_saved_and_loaded(surrogate, tmp_path):

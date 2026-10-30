@@ -25,15 +25,14 @@ import numpy as np
 import torch
 from scipy.integrate import trapezoid
 
-from saetass import Grid, Particle, Solver, State
 from saetass import units as su
 from saetass.cli import set_log_level
+from saetass.pinn.confirm import simulate
 from saetass.pinn.dataset import bubble_from_log
 from saetass.pinn.reference import solve
 from saetass.pinn.surrogate import WindBubbleSurrogate
 from saetass.pinn.training import Tensors, errors
 from saetass.pinn.wind_bubble import DimensionlessBubble, physical_bubble
-from saetass.utils.bubble_profiles import BubbleProfileCalculator
 
 
 def summary(values: np.ndarray) -> dict:
@@ -101,40 +100,6 @@ def random_physical(rng: np.random.Generator) -> dict:
     )
 
 
-def simulate(
-    r: np.ndarray, energy: u.Quantity, parameters: dict, n_steps: int, end: float
-) -> tuple[np.ndarray, float]:
-    """A run of :py:class:`~saetass.solver.Solver`, as in the example of the wind bubble."""
-    physical = {k: v for k, v in parameters.items() if k != "eta_B"}
-    calculator = BubbleProfileCalculator(r_grid=r * u.pc, model="Morlino21", **physical)
-    setup = calculator.get_all_profiles(
-        energy, eta_B=parameters["eta_B"], eta_inj=0.1, E_max=1 * u.PeV
-    )
-    solver = Solver(
-        state=State(
-            psi_p=np.zeros(r.size) * su.PSI_P,
-            grid=Grid(
-                r_centers=r * u.pc, t_grid=np.linspace(0.0, end, n_steps) * u.Myr
-            ),
-            particle=Particle.PROTON,
-        ),
-        problem_type="advection-source-diffusion",
-        operator_params={
-            "advection": {
-                "v_centers": setup["v_field"],
-                "cfl": 0.8,
-                "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
-            },
-            "diffusion": {"D_values": setup["D_values"], "psi_end": 0.0 * su.PSI_P},
-            "source": {"source": setup["Q"]},
-        },
-        quiet=True,
-    )
-    start = time.perf_counter()
-    solver.run()
-    return solver.state.psi_p.to_value(su.PSI_P), time.perf_counter() - start
-
-
 def physical_comparison(surrogate: WindBubbleSurrogate, n: int, seed: int = 11) -> dict:
     """
     Surrogate and SAETASS at 600 cells against the converged solution of random bubbles.
@@ -172,7 +137,11 @@ def physical_comparison(surrogate: WindBubbleSurrogate, n: int, seed: int = 11) 
         dr = r[1]
         # The rule of examples/01_multi_energy_diffusion.py for the number of steps
         n_steps = int((6000 + 9000 * np.log10(energy.to_value(u.GeV))) * end / 3.0) + 2
-        psi, cost = simulate(r, energy, parameters, n_steps, end)
+        start = time.perf_counter()
+        psi = simulate(
+            r * u.pc, energy, end * su.TIME, n_steps, E_max=1 * u.PeV, **parameters
+        ).to_value(su.PSI_P)
+        cost = time.perf_counter() - start
 
         reference = solve(bubble, np.array([target]), resolution=8)
         x = r / scales.R_TS
