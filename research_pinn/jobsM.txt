@@ -1,0 +1,9 @@
+tiltnorm 22 250 6.4 3.5 0 12000 main
+norm 22 250 6.4 3.5 0 12000 main
+plain 22 250 6.4 3.5 0 12000 main
+tiltnorm 1 270 6.4 3.5 0 12000 main
+norm 1 270 6.4 3.5 0 12000 main
+plain 1 270 6.4 3.5 0 12000 main
+tiltnorm 100 500 15 2 0 12000 main
+norm 100 500 15 2 0 12000 main
+plain 100 500 15 2 0 12000 main
