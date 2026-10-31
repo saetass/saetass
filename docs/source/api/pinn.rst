@@ -1,22 +1,84 @@
 PINN surrogates
 ===============
 
-The :py:mod:`saetass.pinn` subpackage provides mesh-free surrogates of the transport equation: networks that are trained once over a space of physical parameters and then evaluate :math:`\psi(t, r, p)` at any point, on a CPU or a GPU, in a time much shorter than a simulation.
-They are meant for what needs very many evaluations, such as parameter searches.
+The :py:mod:`saetass.pinn` subpackage holds two fast models of the transport equation, for what needs very many evaluations, such as parameter searches:
+
+- A **batched solver** (:py:mod:`saetass.pinn.radial_solver`), differentiable, which runs on a GPU and needs no training and no time steps. It accepts any :math:`D(r)`, :math:`v(r)` and :math:`S(r)`, and it is the most accurate of the two.
+- **Surrogates** (:py:mod:`saetass.pinn.surrogate`): networks that are trained once over a space of physical parameters and then evaluate :math:`\psi(t, r, p)` at any point, about ten times faster than the solver, but only for the family they were trained on.
+
 Solutions that a result depends on should be confirmed with :py:class:`~saetass.solver.Solver`, which remains the reference.
 
-The surrogates need PyTorch, an optional dependency:
+Both need PyTorch, an optional dependency:
 
 .. code-block:: bash
 
     python -m pip install "saetass[pinn]"
 
+Batched solver
+--------------
+
+:py:class:`~saetass.pinn.radial_solver.RadialSolver` solves the equation for each momentum without losses, with static coefficients and a constant source from an empty domain, for a whole batch of problems at once, and :py:class:`~saetass.pinn.radial_solver.WindBubbleSolver` does it for wind bubbles with the interface of the surrogates:
+
+.. code-block:: python
+
+    import torch
+
+    from saetass.pinn.radial_solver import RadialSolver
+
+    nodes = torch.linspace(0.0, 1.0, 513, dtype=torch.float64, device="cuda")
+    solver = RadialSolver(nodes)
+    x = solver.centers
+    D = 0.01 * torch.where(x < 0.3, 1.0, 30.0)[None]
+    v = (0.3 / x).clamp(max=1.0)[None]
+    source = solver.shell(torch.tensor([0.1]).to(x))
+    log_psi = solver.log_psi(D, v, source, t=torch.tensor([2.0]).to(x))
+
+Everything in the call is differentiable, with respect to each value of ``D`` and ``v`` if needed, and :py:class:`~saetass.pinn.inversion.DiffusionInversion` uses that to recover :math:`D(r)` from :math:`\psi` with no assumed form.
+There is no training set: a new problem only costs its solve.
+
+Results on a shared NVIDIA L40S, with 48 nodes of the contour, on the 128 bubbles of the test set of the surrogate:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Nodes per bubble
+     - :math:`L_2` error of :math:`\psi`: median
+     - 95th percentile
+     - Worst
+     - Time per profile
+   * - 128
+     - 0.076 %
+     - 0.97 %
+     - 4.0 %
+     - 0.14 ms
+   * - 512
+     - 0.0047 %
+     - 0.062 %
+     - 0.25 %
+     - 0.14 ms
+   * - 1024
+     - 0.0012 %
+     - 0.014 %
+     - 0.057 %
+     - 0.17 ms
+
+Above :math:`10^{-6}` of the largest :math:`\psi`, the largest :math:`|\Delta \ln \psi|` against the same solver on 4096 nodes, over 256 random bubbles and times, is 0.019 % in the median, 1.1 % in the 95th percentile and 3.2 % in the worst case with 1024 nodes, and 0.062 %, 3.6 % and 10 % with 512.
+That comparison is not independent, but the reference solutions are not accurate enough to measure it: at the worst bubble of the test set they converge to the solver as they are refined, with differences of 325 %, 93 %, 25 % and 6.5 % at resolutions 1, 2, 4 and 8.
+The same happens with :py:class:`~saetass.solver.Solver`: at 3 pc and 100 GeV in the wind of ``validation/cases/pinn_parameter_search.py``, the difference is 33 % at 1200 cells, 8 % at 2400, 1.8 % at 4800 and 0.15 % at 9600.
+
+Limits of the solver:
+
+- No energy losses, no time-dependent coefficients or sources, and a source that does not change sign.
+- Results are accurate relative to :math:`\psi` where it exceeds about :math:`10^{-6}` of its maximum. Below that the check of the module only guarantees :math:`0 \le \psi \le \psi_\mathrm{ss}`.
+- A front carried by advection with almost no diffusion, such as the one of ``electrons_2d`` in the benchmarks, cannot be represented on the contour.
+- The wind bubble needs :math:`\delta < 1`, so it does not cover Bohm diffusion.
+
 .. warning::
 
     A surrogate only knows the family of problems it was trained on, and it refuses inputs outside that family. It does not replace :py:class:`~saetass.solver.Solver` for other profiles, operators or parameters.
 
-What is covered
----------------
+What the surrogates cover
+-------------------------
 
 The current surrogate describes the wind bubble of :py:class:`~saetass.utils.bubble_profiles.BubbleProfileCalculator` with the Morlino21 profiles, for advection, diffusion and a source at the termination shock:
 
@@ -97,6 +159,18 @@ Datasets
 --------
 
 .. automodule:: saetass.pinn.dataset
+    :members:
+
+Batched solver of the radial equation
+-------------------------------------
+
+.. automodule:: saetass.pinn.radial_solver
+    :members:
+
+Inversion of the diffusion coefficient
+--------------------------------------
+
+.. automodule:: saetass.pinn.inversion
     :members:
 
 Network

@@ -73,7 +73,7 @@ jobs:
       - name: Run the tests of the surrogates
         env:
           NUMBA_NUM_THREADS: 1
-        run: pytest test/test_pinn_reference.py test/test_pinn_surrogate.py
+        run: pytest test/test_pinn_reference.py test/test_pinn_surrogate.py test/test_pinn_radial_solver.py
 
   package:
     name: Built package

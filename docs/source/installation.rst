@@ -43,7 +43,7 @@ Other use cases need further packages, grouped as optional dependencies ("extras
    * - :code:`dev`
      - Everything above, plus pre-commit, for development.
    * - :code:`pinn`
-     - Train and evaluate the surrogates of :doc:`api/pinn`, with PyTorch, which is not part of :code:`dev` because of its size. Install the build of PyTorch that matches your GPU first.
+     - Train and evaluate the surrogates and run the batched solver of :doc:`api/pinn`, with PyTorch, which is not part of :code:`dev` because of its size. Install the build of PyTorch that matches your GPU first.
 
 Environment Isolation
 ---------------------

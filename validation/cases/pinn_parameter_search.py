@@ -1,14 +1,19 @@
 r"""
-Parameter search with a wind bubble surrogate, against SAETASS.
+Parameter search with a wind bubble surrogate or the batched solver, against SAETASS.
 
 A mock observation is simulated with SAETASS: the radial profile of psi at several
 energies, with noise. Four parameters of the bubble are then recovered with an ensemble
-sampler that only uses the surrogate, and the best fit is confirmed with a new SAETASS run.
+sampler that only uses the fast model, and the best fit is confirmed with a new SAETASS run.
+
+With --confirm K, K samples of the posterior are run with SAETASS and weighted by the
+ratio of its likelihood to that of the fast model, which turns the search into a sample of
+the posterior of SAETASS itself, as long as the effective sample size stays high.
 
 The script reports the time of the search, and what the same number of evaluations would
 take with SAETASS, from the time of the runs it does.
 
 Usage: python pinn_parameter_search.py surrogate.pt [--device cuda] [--walkers 2048]
+       python pinn_parameter_search.py --nodes 512 --confirm 256
 """
 
 import argparse
@@ -23,8 +28,10 @@ import torch
 from saetass import units as su
 from saetass.cli import set_log_level
 from saetass.pinn.confirm import simulate as run_solver
+from saetass.pinn.radial_solver import WindBubbleSolver
 from saetass.pinn.surrogate import WindBubbleSurrogate
 from saetass.pinn.wind_bubble import FastScales
+from saetass.sweep import run_sweep
 
 #: Parameters of the mock observation: log10 of L_wind, M_dot, rho_0 and eta_B.
 TRUTH = np.array([38.3, -4.0, -22.5, -1.0])
@@ -38,18 +45,22 @@ NOISE = 0.05
 N_RADII = 12
 
 
+#: Contour of the batched solver in a search: more nodes do not change the posterior.
+N_CONTOUR = 24
+
+
 def simulate(
-    theta: np.ndarray, energy: float, radii: np.ndarray
+    theta: np.ndarray, energy: float, radii: np.ndarray, cells: int = 1200
 ) -> tuple[np.ndarray, float]:
-    """A SAETASS run on 1200 cells, with psi at ``radii``, and its duration."""
+    """A SAETASS run on ``cells`` cells, with psi at ``radii``, and its duration."""
     L_wind, M_dot, rho, eta_B = 10.0**theta
-    r = np.linspace(0.0, R_MAX, 1200)
+    r = np.linspace(0.0, R_MAX, cells)
     start = time.perf_counter()
     psi = run_solver(
         r * u.pc,
         energy * u.GeV,
         AGE * u.Myr,
-        2 * int(6000 + 9000 * np.log10(energy)),
+        cells * int(6000 + 9000 * np.log10(energy)) // 600,
         L_wind=L_wind * u.erg / u.s,
         M_dot=M_dot * const.M_sun / u.yr,
         rho_0=rho * u.g / u.cm**3,
@@ -60,11 +71,47 @@ def simulate(
     return np.exp(np.interp(radii, r, np.log(psi))), time.perf_counter() - start
 
 
+def confirmation_run(task: tuple[np.ndarray, float, np.ndarray]) -> np.ndarray:
+    """Logarithm of psi of one SAETASS run, for a worker of the sweep."""
+    theta, energy, radii = task
+    return np.log(simulate(theta, energy, radii)[0])
+
+
+def confirm(
+    samples: np.ndarray, log_fast: np.ndarray, radii: np.ndarray, data: np.ndarray
+) -> dict:
+    """Importance sampling of the posterior of SAETASS, from samples of the fast posterior."""
+    tasks = [(theta, energy, radii) for theta in samples for energy in ENERGIES]
+    begin = time.perf_counter()
+    runs = run_sweep(confirmation_run, tasks, max_workers=16)
+    seconds = time.perf_counter() - begin
+    log_psi = np.array(runs).reshape(samples.shape[0], ENERGIES.size, -1)
+    log_like = -0.5 * np.sum(((log_psi - np.log(data)) / NOISE) ** 2, axis=(1, 2))
+    log_weights = log_like - log_fast
+    weights = np.exp(log_weights - log_weights.max())
+    effective = weights.sum() ** 2 / np.sum(weights**2)
+    weights /= weights.sum()
+    mean = np.sum(weights[:, None] * samples, axis=0)
+    std = np.sqrt(np.sum(weights[:, None] * (samples - mean) ** 2, axis=0))
+    return {
+        "runs": len(tasks),
+        "seconds": seconds,
+        "samples": samples.shape[0],
+        "effective_sample_size": float(effective),
+        "mean": mean.tolist(),
+        "std": std.tolist(),
+        "pull": ((mean - TRUTH) / std).tolist(),
+    }
+
+
 class Likelihood:
     """Gaussian likelihood of ln(psi), with walkers in the rows of ``theta``."""
 
     def __init__(
-        self, surrogate: WindBubbleSurrogate, radii: np.ndarray, data: np.ndarray
+        self,
+        surrogate: WindBubbleSurrogate | WindBubbleSolver,
+        radii: np.ndarray,
+        data: np.ndarray,
     ) -> None:
         self.surrogate = surrogate
         device = surrogate.device
@@ -146,7 +193,9 @@ def stretch_sampler(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("surrogate")
+    parser.add_argument("surrogate", nargs="?")
+    parser.add_argument("--nodes", type=int, default=None)
+    parser.add_argument("--confirm", type=int, default=0)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--walkers", type=int, default=2048)
     parser.add_argument("--steps", type=int, default=1500)
@@ -158,12 +207,17 @@ def main() -> None:
     set_log_level("ERROR")
     rng = np.random.default_rng(arguments.seed)
     torch.manual_seed(arguments.seed)
-    paths = arguments.surrogate.split(",")
-    surrogate = (
-        WindBubbleSurrogate.average(paths, arguments.device)
-        if len(paths) > 1
-        else WindBubbleSurrogate.load(paths[0], arguments.device)
-    )
+    if arguments.nodes is not None:
+        surrogate = WindBubbleSolver(
+            arguments.nodes, N_CONTOUR, device=arguments.device
+        )
+    else:
+        paths = arguments.surrogate.split(",")
+        surrogate = (
+            WindBubbleSurrogate.average(paths, arguments.device)
+            if len(paths) > 1
+            else WindBubbleSurrogate.load(paths[0], arguments.device)
+        )
 
     radii = np.linspace(arguments.min_radius, 110.0, N_RADII)
     data, costs = [], []
@@ -220,6 +274,15 @@ def main() -> None:
             evaluations * sum(costs) / len(costs) / 3600.0
         ),
     }
+    if arguments.confirm:
+        picked = torch.randperm(settled[finite].shape[0], device=device)
+        picked = picked[: arguments.confirm]
+        report["saetass_posterior"] = confirm(
+            settled[finite][picked].cpu().numpy(),
+            good[finite][picked].cpu().numpy(),
+            radii,
+            data,
+        )
     print(json.dumps(report, indent=2))
     if arguments.output:
         with open(arguments.output, "w") as file:
