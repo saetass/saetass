@@ -24,8 +24,8 @@ from saetass.pinn.inversion import DiffusionInversion
 from saetass.pinn.radial_solver import RadialSolver
 from saetass.pinn.wind_bubble import FastScales
 
-#: Radii of the data, in pc, and their relative noise.
-RADII = np.geomspace(3.0, 200.0, 40)
+#: Range of the radii of the data, in pc, and their relative noise.
+FIRST_RADIUS, LAST_RADIUS = 3.0, 200.0
 NOISE = 0.03
 #: Cells of the SAETASS run of the data.
 CELLS = 4800
@@ -76,6 +76,7 @@ def main() -> None:
     parser.add_argument("--nodes", type=int, default=1025)
     parser.add_argument("--contour", type=int, default=24)
     parser.add_argument("--knots", type=int, default=160)
+    parser.add_argument("--radii", type=int, default=40)
     parser.add_argument("--realizations", type=int, default=32)
     parser.add_argument("--steps", type=int, default=2400)
     parser.add_argument("--regularization", type=float, default=3.0)
@@ -90,10 +91,13 @@ def main() -> None:
     solver = RadialSolver(nodes, arguments.contour)
     bubble = bubble_fields(solver, device)
 
-    clean = np.array([simulate(TRUTH, energy, RADII, CELLS)[0] for energy in ENERGIES])
+    observed = np.geomspace(FIRST_RADIUS, LAST_RADIUS, arguments.radii)
+    clean = np.array(
+        [simulate(TRUTH, energy, observed, CELLS)[0] for energy in ENERGIES]
+    )
     log_data = torch.as_tensor(np.log(clean), dtype=torch.float64, device=device)
     log_data = log_data - bubble["log_unit"][:, None]
-    radii = torch.as_tensor(RADII / R_MAX, dtype=torch.float64, device=device)
+    radii = torch.as_tensor(observed / R_MAX, dtype=torch.float64, device=device)
 
     factors = bubble["D"][:, -1] / bubble["D"][0, -1]
     with torch.no_grad():

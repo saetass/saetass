@@ -4,7 +4,7 @@ PINN surrogates
 The :py:mod:`saetass.pinn` subpackage holds two fast models of the transport equation, for what needs very many evaluations, such as parameter searches:
 
 - A **batched solver** (:py:mod:`saetass.pinn.radial_solver`), differentiable, which runs on a GPU and needs no training and no time steps. It accepts any :math:`D(r)`, :math:`v(r)` and :math:`S(r)`, and it is the most accurate of the two.
-- **Surrogates** (:py:mod:`saetass.pinn.surrogate`): networks that are trained once over a space of physical parameters and then evaluate :math:`\psi(t, r, p)` at any point, about ten times faster than the solver, but only for the family they were trained on.
+- **Surrogates** (:py:mod:`saetass.pinn.surrogate`): networks that are trained once over a space of physical parameters and then evaluate :math:`\psi(t, r, p)` at any point, more than ten times faster than the solver, but only for the family they were trained on.
 
 Solutions that a result depends on should be confirmed with :py:class:`~saetass.solver.Solver`, which remains the reference.
 
@@ -35,6 +35,7 @@ Batched solver
 
 Everything in the call is differentiable, with respect to each value of ``D`` and ``v`` if needed, and :py:class:`~saetass.pinn.inversion.DiffusionInversion` uses that to recover :math:`D(r)` from :math:`\psi` with no assumed form.
 There is no training set: a new problem only costs its solve.
+With ``validation/cases/pinn_diffusion_inversion.py`` and data from SAETASS with 3 % of noise, 160 free values of :math:`D` reach a :math:`\chi^2` per point of 1.0 and a median error of 1 % in each zone, and they place a jump of 265 times one knot away from its true radius with 160 radii of data, but seven pc away with 40. Next to the shock the estimate oscillates by up to a factor of 2.2, outside its band. The coverage of the 68 % band ranged from 75 % to 95 %, so it is not calibrated.
 
 Results on a shared NVIDIA L40S, with 48 nodes of the contour, on the 128 bubbles of the test set of the surrogate:
 
