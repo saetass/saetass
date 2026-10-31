@@ -151,15 +151,21 @@ def main() -> None:
     parser.add_argument("--walkers", type=int, default=2048)
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--min-radius", type=float, default=16.0)
     parser.add_argument("--output", default=None)
     arguments = parser.parse_args()
 
     set_log_level("ERROR")
     rng = np.random.default_rng(arguments.seed)
     torch.manual_seed(arguments.seed)
-    surrogate = WindBubbleSurrogate.load(arguments.surrogate, arguments.device)
+    paths = arguments.surrogate.split(",")
+    surrogate = (
+        WindBubbleSurrogate.average(paths, arguments.device)
+        if len(paths) > 1
+        else WindBubbleSurrogate.load(paths[0], arguments.device)
+    )
 
-    radii = np.linspace(4.0, 110.0, N_RADII)
+    radii = np.linspace(arguments.min_radius, 110.0, N_RADII)
     data, costs = [], []
     for energy in ENERGIES:
         psi, seconds = simulate(TRUTH, energy, radii)

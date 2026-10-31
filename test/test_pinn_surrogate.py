@@ -229,6 +229,36 @@ def test_surrogate_reports_the_residual(surrogate):
     assert np.all(np.isfinite(residual))
 
 
+def test_average_is_the_mean_of_the_members_and_reports_their_spread(tmp_path):
+    paths, predictions = [], []
+    bubble = DimensionlessBubble(5.0, 200.0, 6.0, 3.0)
+    x = np.linspace(0.5, 15.0, 10)
+    for seed in range(2):
+        torch.manual_seed(seed)
+        model = BubbleNetwork(BOUNDS, TIME_BOUNDS, width=32, n_blocks=2)
+        torch.nn.init.normal_(model.head.weight, std=0.1)
+        member = WindBubbleSurrogate(model, DELTA_K)
+        paths.append(tmp_path / f"{seed}.pt")
+        member.save(paths[-1])
+        predictions.append(member.log_ratio(x, 10.0, bubble))
+    average = WindBubbleSurrogate.average(paths)
+    assert np.allclose(
+        average.log_ratio(x, 10.0, bubble), np.mean(predictions, axis=0), atol=1e-6
+    )
+    assert np.allclose(
+        average.spread(x, 10.0, bubble),
+        np.abs(predictions[0] - predictions[1]),
+        atol=1e-6,
+    )
+
+
+def test_only_averages_have_a_spread(surrogate):
+    with pytest.raises(TypeError, match="spread"):
+        surrogate.spread(
+            np.array([1.5]), 10.0, DimensionlessBubble(5.0, 200.0, 6.0, 3.0)
+        )
+
+
 def _double(values):
     return torch.as_tensor(values, dtype=torch.float64)
 

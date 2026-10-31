@@ -234,6 +234,8 @@ class TrainingOptions:
         Number of collocation points of each step, ``0`` to train on data only.
     physics_weight : float
         Weight of the physics residual in the loss.
+    physics_margin : float
+        Distance in the zone coordinate to the interfaces below which there are no collocation points.
     floor_weight : float
         Weight of the one-sided penalty.
     learning_rate : float
@@ -250,6 +252,7 @@ class TrainingOptions:
     batch_size: int = 32768
     physics_batch: int = 0
     physics_weight: float = 1.0
+    physics_margin: float = 0.02
     floor_weight: float = 0.1
     learning_rate: float = 5e-4
     log_every: int = 10_000
@@ -392,15 +395,17 @@ def train(
             # Only inside the zones, and away from the outer boundary, where the ratio to
             # the steady state is singular
             inside = (
-                (torch.abs(zeta - 1.0) > 1e-5)
-                & (torch.abs(zeta - 2.0) > 1e-5)
+                (torch.abs(zeta - 1.0) > options.physics_margin)
+                & (torch.abs(zeta - 2.0) > options.physics_margin)
                 & (zeta < 2.98)
             )
             residual = physics_residual(
                 model, zeta[inside], log_t[inside], theta[inside], data.delta
             )
             del i
-            physics = torch.mean(residual**2)
+            # The residual has heavy tails next to the interfaces: a squared loss would
+            # let them dominate, while this one grows linearly for large residuals
+            physics = torch.mean(torch.sqrt(1.0 + residual**2) - 1.0)
             loss = loss + options.physics_weight * physics
         optimizer.zero_grad(set_to_none=True)
         loss.backward()

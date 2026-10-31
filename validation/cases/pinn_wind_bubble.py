@@ -8,11 +8,13 @@ monitors it. The script measures, against converged reference solutions:
    1e-6 of the largest psi of each time, on a Sobol test set of dimensionless bubbles.
 2. The same error next to the error of SAETASS at its usual resolution, on random
    physical bubbles, in the units of a user.
-3. The particle budget: the number of particles against the reference, and against the
+3. Both against SAETASS at a much higher resolution, which is independent of the
+   reference solutions that generated the training data.
+4. The particle budget: the number of particles against the reference, and against the
    injected number at early times, when none has escaped yet, which needs no reference.
-4. The cost of an evaluation against that of a simulation.
+5. The cost of an evaluation against that of a simulation.
 
-Usage: python pinn_wind_bubble.py surrogate.pt test.npz [--device cuda] [--bubbles 32]
+Usage: python pinn_wind_bubble.py first.pt,second.pt test.npz [--device cuda] [--bubbles 32]
 """
 
 import argparse
@@ -196,6 +198,90 @@ def physical_comparison(surrogate: WindBubbleSurrogate, n: int, seed: int = 11) 
     }
 
 
+def solver_comparison(
+    surrogate: WindBubbleSurrogate, n: int, n_cells: int = 4800, seed: int = 13
+) -> dict:
+    """
+    Surrogate and SAETASS at 600 cells against SAETASS at ``n_cells``, without the reference solver.
+
+    The reference solutions generate the training data, so this is the independent check.
+    It uses energies where a uniform grid of ``n_cells`` resolves the layers of the shock.
+    """
+    rng = np.random.default_rng(seed)
+    rows = []
+    while len(rows) < n:
+        parameters = random_physical(rng)
+        energy = 10 ** rng.uniform(2.0, 5.5) * u.GeV
+        probe = physical_bubble(energy, r_max=1e5 * u.pc, E_max=1 * u.PeV, **parameters)
+        r_max = float(rng.uniform(2.0, 5.0) * probe.R_b)
+        scales = physical_bubble(
+            energy, r_max=r_max * u.pc, E_max=1 * u.PeV, **parameters
+        )
+        numbers = scales.dimensionless
+        bubble = DimensionlessBubble(
+            float(numbers.peclet[0]),
+            float(numbers.diffusion_ratio[0]),
+            float(numbers.bubble_ratio),
+            float(numbers.domain_ratio),
+            numbers.delta,
+        )
+        end = float(rng.uniform(0.1, 1.0)) * parameters["t_b"].to_value(su.TIME)
+        target = end / scales.time_unit
+        fine_r = np.linspace(0.0, r_max, n_cells)
+        # The layer of the wind must span several cells of the fine grid
+        layer = (
+            2.0 * scales.R_TS * 11.0 ** (scales.delta / 2.0) / numbers.peclet[0] / 8.0
+        )
+        try:
+            surrogate.log_ratio(np.array([1.5]), target, bubble)
+        except ValueError:
+            continue
+        if layer < 2.0 * fine_r[1]:
+            continue
+
+        steps = int((6000 + 9000 * np.log10(energy.to_value(u.GeV))) * end / 3.0) + 2
+        fine = simulate(
+            fine_r * u.pc,
+            energy,
+            end * su.TIME,
+            steps * n_cells // 600,
+            E_max=1 * u.PeV,
+            **parameters,
+        ).to_value(su.PSI_P)
+        coarse_r = np.linspace(0.0, r_max, 600)
+        coarse = simulate(
+            coarse_r * u.pc, energy, end * su.TIME, steps, E_max=1 * u.PeV, **parameters
+        ).to_value(su.PSI_P)
+        x = coarse_r / scales.R_TS
+        predicted = surrogate.dimensionless_psi(x, target, bubble) * scales.psi_unit[0]
+        exact = np.interp(coarse_r, fine_r, fine)
+        dr = coarse_r[1]
+        away = (np.abs(coarse_r - scales.R_b) > 3.0 * dr) & (coarse_r > 3.0 * dr)
+        weight = np.linalg.norm(exact[away])
+        rows.append(
+            {
+                "energy_GeV": float(energy.to_value(u.GeV)),
+                "peclet": bubble.peclet,
+                "saetass_600_l2": float(
+                    np.linalg.norm((coarse - exact)[away]) / weight
+                ),
+                "surrogate_l2": float(
+                    np.linalg.norm((predicted - exact)[away]) / weight
+                ),
+            }
+        )
+    saetass = np.array([row["saetass_600_l2"] for row in rows])
+    network = np.array([row["surrogate_l2"] for row in rows])
+    return {
+        "bubbles": n,
+        "cells_of_the_reference": n_cells,
+        "saetass_600_cells_l2": summary(saetass),
+        "surrogate_l2": summary(network),
+        "surrogate_better_than_saetass": float(np.mean(network < saetass)),
+        "rows": rows,
+    }
+
+
 def throughput(surrogate: WindBubbleSurrogate, n_r: int = 600) -> dict:
     """Radial profiles evaluated per second, in batches of different bubbles."""
     rng = np.random.default_rng(3)
@@ -227,16 +313,23 @@ def main() -> None:
     parser.add_argument("test_set")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--bubbles", type=int, default=32)
+    parser.add_argument("--solver-bubbles", type=int, default=8)
     parser.add_argument("--output", default=None)
     arguments = parser.parse_args()
 
     set_log_level("ERROR")
-    surrogate = WindBubbleSurrogate.load(arguments.surrogate, arguments.device)
+    paths = arguments.surrogate.split(",")
+    surrogate = (
+        WindBubbleSurrogate.average(paths, arguments.device)
+        if len(paths) > 1
+        else WindBubbleSurrogate.load(paths[0], arguments.device)
+    )
     report = {
         "test_set": test_set_errors(surrogate, arguments.test_set),
         "throughput": throughput(surrogate),
         "particle_budget": particle_budget(surrogate),
         "physical_comparison": physical_comparison(surrogate, arguments.bubbles),
+        "solver_comparison": solver_comparison(surrogate, arguments.solver_bubbles),
     }
     text = json.dumps(report, indent=2)
     print(json.dumps({k: v for k, v in report.items() if k != "rows"}, indent=2))

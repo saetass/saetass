@@ -122,3 +122,31 @@ class BubbleNetwork(nn.Module):
         for block in self.blocks:
             z = block(z)
         return self.scale * self.head(self.norm(z)).squeeze(-1)
+
+
+class AveragedNetwork(nn.Module):
+    """
+    Mean of networks trained with different seeds, which is more accurate than each of them, and whose disagreement estimates the error.
+
+    Parameters
+    ----------
+    members : list of BubbleNetwork
+        Networks with the same domain.
+    """
+
+    def __init__(self, members: list[BubbleNetwork]) -> None:
+        super().__init__()
+        if len(members) < 2:
+            raise ValueError("An average needs at least two networks.")
+        self.members = nn.ModuleList(members)
+        self.register_buffer("bounds", members[0].bounds.clone())
+        self.register_buffer("time_bounds", members[0].time_bounds.clone())
+
+    def forward(self, *inputs: torch.Tensor) -> torch.Tensor:
+        """Mean of the predictions of the members."""
+        return torch.stack([member(*inputs) for member in self.members]).mean(dim=0)
+
+    def spread(self, *inputs: torch.Tensor) -> torch.Tensor:
+        """Largest difference between the predictions of the members."""
+        predictions = torch.stack([member(*inputs) for member in self.members])
+        return predictions.amax(dim=0) - predictions.amin(dim=0)

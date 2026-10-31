@@ -18,6 +18,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - Links to the GitHub repository and PyPI in the header of the documentation ([#46](https://github.com/saetass/saetass/issues/46)).
 - Adiabatic losses: `LossSolver(adiabatic_losses=True)` adds the momentum change `-(p / 3) div v` of the flow, which `Solver` takes from the advection operator, so that advection, diffusion and the adiabatic gains at a shock produce diffusive shock acceleration. `P_dot` is optional when they are on, `v_centers_physical` also accepts callables and `Separable` parameters, and `velocity_divergence` averages the divergence of a flow over the radial cells of a `Grid` ([#29](https://github.com/saetass/saetass/issues/29), [#71](https://github.com/saetass/saetass/pull/71)).
 
+- `saetass.pinn`: mesh-free surrogates of the wind bubble without energy losses, trained once over a parameter space, which evaluate `psi` at any radius, momentum and time in milliseconds, refuse inputs outside their domain and can be confirmed with `Solver`. They need PyTorch, in the new `pinn` extra ([#6](https://github.com/saetass/saetass/issues/6)).
+
 ### Changed
 
 - **Breaking:** `Solver(state, problem_type, ...)` takes the grid from `state.grid` and no longer accepts a `Grid` as first argument ([#11](https://github.com/saetass/saetass/issues/11)).

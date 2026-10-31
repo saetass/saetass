@@ -42,6 +42,8 @@ Other use cases need further packages, grouped as optional dependencies ("extras
      - Check the code style with the version of Ruff used by the continuous integration and the pre-commit hooks.
    * - :code:`dev`
      - Everything above, plus pre-commit, for development.
+   * - :code:`pinn`
+     - Train and evaluate the surrogates of :doc:`api/pinn`, with PyTorch, which is not part of :code:`dev` because of its size. Install the build of PyTorch that matches your GPU first.
 
 Environment Isolation
 ---------------------

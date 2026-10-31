@@ -19,7 +19,7 @@ import torch
 
 from .. import units as su
 from .dataset import zone_coordinate
-from .network import BubbleNetwork
+from .network import AveragedNetwork, BubbleNetwork
 from .training import physics_residual
 from .wind_bubble import (
     BatchedScales,
@@ -58,6 +58,32 @@ class WindBubbleSurrogate:
         self.time_bounds = model.time_bounds.detach().cpu().numpy().astype(float)
 
     @classmethod
+    def average(
+        cls, paths: list[str | Path], device: torch.device | str = "cpu"
+    ) -> "WindBubbleSurrogate":
+        """
+        Load the mean of several surrogates saved by :py:meth:`save`, which also provides :py:meth:`spread`.
+
+        Parameters
+        ----------
+        paths : list of str or pathlib.Path
+            Files of the surrogates, trained with different seeds on the same domain.
+        device : torch.device or str, optional
+            Device of the evaluations. Default is ``'cpu'``.
+
+        Returns
+        -------
+        WindBubbleSurrogate
+            The averaged surrogate.
+        """
+        surrogates = [cls.load(path) for path in paths]
+        return cls(
+            AveragedNetwork([surrogate.model for surrogate in surrogates]),
+            surrogates[0].delta,
+            device,
+        )
+
+    @classmethod
     def load(
         cls, path: str | Path, device: torch.device | str = "cpu"
     ) -> "WindBubbleSurrogate":
@@ -88,7 +114,7 @@ class WindBubbleSurrogate:
 
     def save(self, path: str | Path) -> None:
         """
-        Save the surrogate.
+        Save a surrogate of one network.
 
         Parameters
         ----------
@@ -178,6 +204,39 @@ class WindBubbleSurrogate:
             If a time or a parameter lies outside the domain of the surrogate.
         """
         return self.model(*self._inputs(x, times, bubble)).double().cpu().numpy()
+
+    @torch.no_grad()
+    def spread(
+        self, x: np.ndarray, times: np.ndarray, bubble: DimensionlessBubble
+    ) -> np.ndarray:
+        r"""
+        Disagreement of the members of an average on :math:`\ln \psi`, an indication of the error that needs no simulation.
+
+        It is an indication and not a bound: see the limits in the documentation.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Dimensionless radii.
+        times : numpy.ndarray
+            Dimensionless times.
+        bubble : DimensionlessBubble
+            Dimensionless bubble.
+
+        Returns
+        -------
+        numpy.ndarray
+            Largest difference of :math:`\ln \psi` between the members.
+
+        Raises
+        ------
+        TypeError
+            If the surrogate is not an average, see :py:meth:`average`.
+        """
+        if not isinstance(self.model, AveragedNetwork):
+            raise TypeError("Only averaged surrogates have a spread.")
+        tensors = self._inputs(x, times, bubble)
+        return self.model.spread(*tensors).double().cpu().numpy()
 
     def dimensionless_psi(
         self, x: np.ndarray, times: np.ndarray, bubble: DimensionlessBubble
