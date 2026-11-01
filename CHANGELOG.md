@@ -20,6 +20,7 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ### Changed
 
+- **Breaking:** `BubbleProfileCalculator` raises a `ValueError` when `eta_m` leaves the bubble smaller than a momentum-driven bubble, the smallest that the momentum of the wind allows. Such an `eta_m` put the termination shock at or beyond the edge of the bubble.
 - **Breaking:** `Solver(state, problem_type, ...)` takes the grid from `state.grid` and no longer accepts a `Grid` as first argument ([#11](https://github.com/saetass/saetass/issues/11)).
 - **Breaking:** `compute_sychrotron_losses` is renamed `compute_synchrotron_losses`, without an alias ([#61](https://github.com/saetass/saetass/issues/61)).
 - **Breaking:** the advection and loss operators default to `order=2`, the `minmod` limiter and `cfl=0.5`, and a limiter given with `order=1` raises a `ValueError` ([#65](https://github.com/saetass/saetass/issues/65)).
