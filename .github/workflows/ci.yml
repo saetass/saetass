@@ -20,9 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # pytest-benchmark 5.3.0 fails on pytest 9.2 (ionelmc/pytest-benchmark#321):
-          # remove the constraint once a release supports it
-          pip install -e ".[test,lint]" "pytest<9.2"
+          pip install -e ".[test,lint]"
 
       - name: Check style with Ruff
         run: ruff check . && ruff format --check .
