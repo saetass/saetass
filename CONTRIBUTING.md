@@ -106,6 +106,8 @@ Minimum versions are not raised just because newer releases exist. A minimum is 
 5. **Reference related issues**: Link to any relevant issues in your PR description (e.g., `Closes #42`), so they are closed when it is merged.
 6. **Update the changelog**: Describe every change that users will notice in a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md), in the section that fits (Added, Changed, Deprecated, Removed or Fixed), and mark changes that require users to modify their scripts as **Breaking**. A check fails on pull requests that change `src/` or `pyproject.toml` without a new entry; a maintainer adds the `no changelog` label when users will not notice the change, such as a refactor or a change to the tests.
 
+In pull request and issue descriptions, prefer LaTeX for equations, also inline (e.g. $`\eta_m \leq 1`$), except for code parameters, which stay in backticks.
+
 After submitting:
 
 - A maintainer will review your PR and may request changes
