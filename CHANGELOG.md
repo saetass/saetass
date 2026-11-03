@@ -4,6 +4,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-03
+
 ### Added
 
 - Compiled Numba kernels for the advection, loss and diffusion operators. They run several times faster than the NumPy code of 0.5 on one thread and reproduce its results to rounding error ([#64](https://github.com/saetass/saetass/pull/64)).
@@ -135,7 +137,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 First public, experimental release: transport of cosmic rays in spherical symmetry with advection, diffusion, energy losses and sources combined by operator splitting, bubble profiles of stellar clusters, energy loss rates, tests, tutorials and examples.
 
-[Unreleased]: https://github.com/saetass/saetass/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/saetass/saetass/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/saetass/saetass/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/saetass/saetass/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/saetass/saetass/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/saetass/saetass/compare/v0.3.0...v0.4.0
