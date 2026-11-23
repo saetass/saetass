@@ -538,27 +538,6 @@ code.literal {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   §10b  NOTEBOOK PROMPT RESET (Prevents prompt labels from looking like code)
-   ───────────────────────────────────────────────────────────────────────────── */
-
-.prompt.highlight-none.notranslate,
-.prompt .highlight,
-.prompt pre {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    width: auto !important;
-}
-
-.prompt pre {
-    /* Aligns the [1]: text properly */
-    padding-top: 0.8rem !important;
-    color: var(--pst-color-text-muted);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    §11  ADMONITIONS
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -1357,128 +1336,139 @@ dl.attribute dt {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   §26  DARK TERMINAL OUTPUT (Force dark background for console outputs)
+   §26  NOTEBOOK CELLS (Layout)
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* Target the output container and its preformatted text */
-.nboutput.container .output_area pre,
-.nboutput.container .output_area .highlight pre {
+/* Cells follow each other at a constant distance, without the paddings of
+   nbsphinx and of the containers of the theme. The styles of nbsphinx come after
+   these ones, hence the more specific selectors */
+.bd-content div.nbinput.container,
+.bd-content div.nboutput.container {
+    padding: 0;
+    margin-bottom: var(--saetass-spacing-sm);
+}
+
+.bd-content div.nblast.container {
+    margin-bottom: var(--saetass-spacing-lg);
+}
+
+/* The cell numbers are not shown, so that the code has the full width */
+.bd-content div.nbinput.container div.prompt,
+.bd-content div.nboutput.container div.prompt {
+    display: none;
+}
+
+/* The theme draws a box around HTML outputs in dark mode */
+.bd-content div.nboutput.container div.output_area,
+.bd-content div.nboutput.container div.output_area.rendered_html,
+html[data-theme="dark"] .bd-content div.nboutput.container div.output_area.rendered_html:not(:has(table.dataframe)),
+.bd-content div.nboutput.container div.output_area:not(.rendered_html)>img {
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* At this size the page fits the 88 columns of the code (the line length of
+   Ruff) and of the output (tutorials/execute.py) */
+.bd-content div.nbinput.container div.input_area div[class*=highlight]>pre,
+.bd-content div.nboutput.container div.output_area pre {
+    font-family: var(--saetass-font-family-mono) !important;
+    font-size: 0.8rem;
+    line-height: 1.45 !important;
+    padding: 0.75rem !important;
+    /* Arrows and operators as typed, and box drawings without gaps */
+    font-variant-ligatures: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §27  NOTEBOOK CODE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-content div.nbinput.container div.input_area {
+    border: 1px solid var(--pst-color-border-muted);
+    border-radius: var(--saetass-radius-md);
+    background: var(--pst-color-surface);
+    padding: 0;
+}
+
+html[data-theme="dark"] .bd-content div.nbinput.container div.input_area {
+    background: var(--saetass-neutral-900);
+    border-color: var(--saetass-neutral-700);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §28  NOTEBOOK OUTPUT (Dark terminal in both themes)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.bd-content .nboutput.container .output_area pre {
     background-color: #1b1d24 !important;
     /* SAETASS Neutral 900 (Very Dark) */
     color: #eeeeee !important;
     /* Off-white text */
-    padding: var(--saetass-spacing-md) !important;
     border-radius: var(--saetass-radius-md) !important;
     border: 1px solid var(--saetass-neutral-800) !important;
-
-    /* Terminal styling */
     box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5) !important;
-    font-family: var(--saetass-font-family-mono) !important;
-    line-height: 1.4 !important;
-
-    /* Ensure colors from 'rich' or ANSI are readable */
     text-shadow: none !important;
 }
 
-/* Force specific colors in the banner to pop against the dark background */
-.nboutput.container .output_area span {
-    /* If the inline styles are too dark, this ensures they are visible,
-       but usually ANSI colors look perfect on Neutral 900 */
-    opacity: 1 !important;
+/* Plain text wraps. The output of Rich, already wrapped, keeps its columns */
+.bd-content .nboutput.container .output_area .highlight pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
-/* Optional: Make the scrollbar for these terminal boxes more subtle */
-.nboutput.container .output_area pre::-webkit-scrollbar-thumb {
+/* A bar at the left, instead of the red background of nbsphinx */
+.bd-content div.nboutput.container div.output_area.stderr {
+    background: transparent;
+}
+
+.bd-content .nboutput.container .output_area.stderr pre {
+    border-left: 4px solid var(--pst-color-warning) !important;
+}
+
+.bd-content .nboutput.container .output_area pre::-webkit-scrollbar-thumb {
     background-color: var(--saetass-neutral-600) !important;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   §27  DEACTIVATE DEFAULT NBOUTPUT BOXES
-   ───────────────────────────────────────────────────────────────────────────── */
-
-/* Target the exact selector you found to override its defaults */
-html[data-theme=dark] .bd-content .nboutput .output_area .widget-subarea,
-html[data-theme=dark] .bd-content .nboutput .output_area.rendered_html:not(:has(table.dataframe)) {
-    background-color: transparent !important;
-    /* Remove that forced background */
-    border: none !important;
-    /* Kill the border */
-    padding: 0 !important;
-    /* Remove the forced padding */
-    color: inherit !important;
-    /* Let it use the page/terminal color */
-    box-shadow: none !important;
-    /* Just in case there's a shadow hidden there */
+/* Rich writes the colors of a white page into the notebooks: the same ones for
+   a dark background */
+.bd-content .nboutput.container .output_area pre span[style*="color: #000080"] {
+    color: #7aa6d6 !important;
+    /* Blue: INFO */
 }
 
-/* Also apply to light mode just in case it appears there too */
-.bd-content .nboutput .output_area .widget-subarea,
-.bd-content .nboutput .output_area.rendered_html:not(:has(table.dataframe)) {
-    background-color: transparent !important;
-    border: none !important;
-    padding: 0 !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #008080"] {
+    color: #56b6c2 !important;
+    /* Cyan: numbers */
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   §28  NBSPHINX RESET (Neutralizing Default Styles)
-   ───────────────────────────────────────────────────────────────────────────── */
-
-/* 1. Fix the Input Area (The Code Box) */
-div.nbinput.container div.input_area {
-    border: 1px solid var(--pst-color-border-muted) !important;
-    border-radius: var(--saetass-radius-md) !important;
-    background: var(--pst-color-surface) !important;
-    padding: 0 !important;
-    /* Let the internal highlight handle padding */
+.bd-content .nboutput.container .output_area pre span[style*="color: #008000"] {
+    color: #8cc570 !important;
+    /* Green: strings and progress */
 }
 
-/* 2. Fix the Prompt Area ([1]:) */
-div.nbinput.container div.prompt,
-div.nboutput.container div.prompt {
-    /* Resetting the default nbsphinx width/padding */
-    width: 65px !important;
-    min-width: 65px !important;
-    padding-top: 0.8rem !important;
-
-    /* Re-enabling selection if you want to be able to copy the [1] */
-    user-select: auto !important;
-
-    /* Aesthetics */
-    font-size: var(--saetass-font-size-xs) !important;
-    border: none !important;
-    background: transparent !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #808000"] {
+    color: #f3ac4b !important;
+    /* Yellow: WARNING */
 }
 
-/* 3. Dark Mode Specificity Fix */
-/* This prevents the theme from forcing a white background in dark mode */
-html[data-theme="dark"] div.nbinput.container div.input_area {
-    background: var(--saetass-neutral-900) !important;
-    border-color: var(--saetass-neutral-700) !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #800000"] {
+    color: #f07178 !important;
+    /* Red: ERROR */
 }
 
-/* 4. Remove the default nbsphinx shadow/border on output images/widgets */
-.nboutput.container .output_area.rendered_html,
-.nboutput.container .output_area img {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #800080"] {
+    color: #c792ea !important;
+    /* Magenta: paths and attributes */
 }
 
-/* Completely hide the prompt div */
-.nbinput.container div.prompt,
-.nboutput.container div.prompt {
-    display: none !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #7f7f7f"] {
+    color: #a3a8b3 !important;
+    /* Dim text */
 }
 
-/* Re-align the code area to use the full width now that the prompt is gone */
-.nbinput.container div.input_area,
-.nboutput.container div.output_area {
-    width: 100% !important;
-    margin-left: 0 !important;
-}
-
-/* Optional: Add a tiny bit of left padding to the code so it's not
-   glued to the very edge of the container */
-.nbinput.container div.input_area pre {
-    padding-left: var(--saetass-spacing-md) !important;
+.bd-content .nboutput.container .output_area pre span[style*="color: #3a3a3a"] {
+    color: #565b66 !important;
+    /* Remaining part of the progress bar */
 }
