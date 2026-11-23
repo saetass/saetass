@@ -87,7 +87,7 @@ Simulation Output
 
 After running the script, the following figure is generated.
 
-.. image:: ../../../examples/outputs/multi_energy_diffusion_comparison.pdf
+.. image:: ../../assets/multi_energy_diffusion_comparison.png
     :width: 100%
     :align: center
     :alt: Multi-energy diffusion comparison output
