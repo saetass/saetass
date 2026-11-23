@@ -1,4 +1,5 @@
 import sys
+import time
 
 from rich.console import Console
 from rich.progress import (
@@ -35,13 +36,51 @@ custom_theme = Theme(
     }
 )
 
-width = None if sys.stdout.isatty() else 120
-console = Console(theme=custom_theme, width=width)
+console = Console(theme=custom_theme)
+if not (console.is_jupyter or sys.stdout.isatty()):
+    console.width = 120  # a file, a pipe, a CI log
+
+#: Seconds between updates of the progress bar in notebooks.
+NOTEBOOK_REFRESH_INTERVAL = 0.1
+
+
+class NotebookProgress(Progress):
+    """
+    Progress bar for notebooks, drawn in an output that is updated in place.
+
+    Rich draws its bar in a widget, which static pages (GitHub, the documentation) do not show and which is not refreshed when the bar stops. This output is saved with the notebook, in its final state.
+    """
+
+    _display = None
+    _next_refresh = 0.0
+
+    def start(self) -> None:
+        """Display the bar."""
+        from IPython.display import display
+
+        self._display = display(self, display_id=True)
+
+    def stop(self) -> None:
+        """Leave the bar in its final state."""
+        self.refresh()
+        self._display = None
+
+    def refresh(self) -> None:
+        """Redraw the bar, if it is displayed."""
+        if self._display is not None:
+            self._next_refresh = time.monotonic() + NOTEBOOK_REFRESH_INTERVAL
+            self._display.update(self)
+
+    def update(self, *args, **kwargs) -> None:
+        """Update a task, redrawing the bar every :py:data:`NOTEBOOK_REFRESH_INTERVAL` seconds."""
+        super().update(*args, **kwargs)
+        if time.monotonic() >= self._next_refresh:
+            self.refresh()
 
 
 class ProgressBarSingleton:
     """
-    Singleton wrapper around rich.progress.Progress to ensure only one Live display is active.
+    Singleton wrapper around rich.progress.Progress (:py:class:`NotebookProgress` in notebooks) to ensure only one Live display is active.
     It tracks reference counts via start() and stop() to manage the lifecycle cleanly across multiple usages.
     """
 
@@ -56,7 +95,8 @@ class ProgressBarSingleton:
 
     def _ensure_progress(self):
         if self._progress is None:
-            self._progress = Progress(
+            progress_class = NotebookProgress if console.is_jupyter else Progress
+            self._progress = progress_class(
                 SpinnerColumn(spinner_name="dots", style=SAETASS_YELLOW),
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(
