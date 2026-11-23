@@ -25,6 +25,7 @@ from matplotlib.gridspec import GridSpec
 from saetass import Grid, Particle, Solver, State
 from saetass import units as su
 from saetass.cli.palette import SAETASS_BLUE, SAETASS_GREEN, SAETASS_ORANGE
+from saetass.sweep import run_sweep
 from saetass.utils.bubble_profiles import BubbleProfileCalculator
 
 # 0.1 Import end
@@ -82,6 +83,9 @@ diffusion_models = {
 
 # Define particle energies
 energies = [1, 100, 1000, 100000]  # GeV
+
+# Number of times at which the distribution is plotted
+sample_count = 12
 
 # ---------------------------------------------------------
 # Helper Plotting Functions
@@ -208,154 +212,159 @@ def finalize_and_save_figure(fig, gs, diffusion_models):
 
 
 # ---------------------------------------------------------
-# Main Execution Loop
+# Simulation of One Energy and Diffusion Model
+# ---------------------------------------------------------
+
+
+def simulate(task):
+    """
+    Runs the simulation of a (diffusion model, energy) pair.
+
+    The worker processes of run_sweep import this function, so it must be defined at
+    the top level of the script.
+    """
+    diff_model_name, energy = task
+
+    # 1. Generate Physical Setup Parameters
+    # Calculate number of timesteps
+    E_k = energy * u.GeV
+    num_timesteps = (
+        int(
+            6000
+            + 9000 * np.log10(energy)
+            + diffusion_models[diff_model_name]["extra_num_timesteps"]
+        )
+        if diff_model_name != "bohm"
+        else 120000
+    )  # Special care needs to be taken in num_timesteps choice due to stability contraints of this specific system
+
+    # We use the new BubbleProfileCalculator from saetass.utils.bubble_profiles
+    t_b = 3 * u.Myr
+    L_wind = 2 * 1e38 * u.erg / u.s
+    M_dot = 1e-4 * const.M_sun / u.yr
+    rho_0 = 20 * const.m_p / u.cm**3
+    calculator = BubbleProfileCalculator(
+        r_grid=np.linspace(0.0, 300.0, 600) * u.pc,
+        model="Morlino21",
+        L_wind=L_wind,
+        M_dot=M_dot,
+        rho_0=rho_0,
+        t_b=t_b,
+    )
+
+    setup = calculator.get_all_profiles(
+        E_k,
+        eta_B=0.1,
+        eta_inj=0.1,
+        E_max=1 * u.PeV,
+        diffusion_model=diff_model_name,
+    )
+
+    r = setup["r_grid"].to("pc").value
+    R_TS = setup["R_TS"]
+    R_b = setup["R_b"]
+    t_end = 3.0  # 3.0 Myr in dimensionless scale
+
+    # 2. Create Solver arguments
+    t_grid = np.linspace(0, t_end, num_timesteps)
+    f_values = np.zeros(len(r))  # Initially no distribution
+
+    # We create an instance of Grid class
+    grid = Grid(r_centers=setup["r_grid"], t_grid=t_grid * u.Myr)
+
+    # We generate the parameters for the subsolvers
+    op_params = {
+        "advection": {
+            "v_centers": setup["v_field"],
+            "order": 2,
+            "limiter": "minmod",
+            "cfl": 0.8,
+            "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
+        },
+        "diffusion": {
+            "D_values": setup["D_values"],
+            "psi_end": 0.0 * su.PSI_P,
+        },
+        "source": {"source": setup["Q"]},
+    }
+
+    # 3. Instantiate Solver
+    # We then instantiate Solver class
+    solver = Solver(
+        state=State(psi_p=f_values * su.PSI_P, grid=grid, particle=Particle.PROTON),
+        problem_type="advection-source-diffusion",
+        operator_params=op_params,
+        substeps={"advection": 1, "diffusion": 1, "source": 1},
+    )
+
+    # 4. Calculate the time sampling checkpoints to plot curves over time
+    num_timesteps = len(t_grid) - 1
+    sample_indices = np.unique(
+        np.append(
+            np.linspace(0, num_timesteps, sample_count, dtype=int),
+            [0, num_timesteps],
+        )
+    )
+
+    stored_curves = [solver.state.psi_p.to_value(su.PSI_P)]
+    stored_times = [t_grid[0]]
+
+    # 5. Simulation loop
+    current_step = 0
+    for next_step in sample_indices[1:]:
+        steps_to_advance = int(next_step - current_step)
+        if steps_to_advance > 0:
+            solver.step(steps_to_advance)  # SIMULATION CORE
+            current_step = next_step
+
+        stored_curves.append(solver.state.psi_p.to_value(su.PSI_P))
+        stored_times.append(t_grid[current_step])
+
+    # 6. Result Normalization
+    ts_idx = np.where(r >= R_TS.to("pc").value)[0][0] + 5
+    ts_level = stored_curves[-1][ts_idx] if stored_curves[-1][ts_idx] > 0 else 1.0
+    normalized_curves = [curve / ts_level for curve in stored_curves]
+
+    # 7. Generate Baseline Theoretical Configuration
+    f_theoretical = calculator.compute_analytical_CR_profile(
+        D_values=setup["D_values"],
+        f_gal=0.0,
+        f_TS=1.0,
+    )
+
+    return {
+        "r": r,
+        "R_TS": R_TS.to("pc").value,
+        "R_b": R_b.to("pc").value,
+        "stored_curves": normalized_curves,
+        "stored_times": stored_times,
+        "f_theoretical": f_theoretical,
+    }
+
+
+# ---------------------------------------------------------
+# Main Execution
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
+    # 8. Run the simulations in parallel worker processes
+    tasks = [(name, energy) for name in diffusion_models for energy in energies]
+    results = run_sweep(simulate, tasks)
+
+    # 9. Render the data of each simulation to the axis GridSpec
     fig, gs = setup_figure()
-    sample_count = 12
     base_ax = None
+    for (diff_model_name, energy), result in zip(tasks, results):
+        diff_props = diffusion_models[diff_model_name]
+        col_idx = energies.index(energy)
+        ax = fig.add_subplot(
+            gs[diff_props["row"], col_idx], sharex=base_ax, sharey=base_ax
+        )
+        if base_ax is None:
+            base_ax = ax
+        plot_simulation_step(
+            ax, energy=energy, diff_props=diff_props, col_idx=col_idx, **result
+        )
 
-    for diff_model_name, diff_props in diffusion_models.items():
-        for col_idx, energy in enumerate(energies):
-            print(f"Processing {diff_model_name} with E = {energy} GeV")
-
-            if base_ax is None:
-                ax = fig.add_subplot(gs[diff_props["row"], col_idx])
-                base_ax = ax
-            else:
-                ax = fig.add_subplot(
-                    gs[diff_props["row"], col_idx], sharex=base_ax, sharey=base_ax
-                )
-
-            # 1. Generate Physical Setup Parameters
-            # Calculate number of timesteps
-            E_k = energy * u.GeV
-            num_timesteps = (
-                int(6000 + 9000 * np.log10(energy) + diff_props["extra_num_timesteps"])
-                if diff_model_name != "bohm"
-                else 120000
-            )  # Special care needs to be taken in num_timesteps choice due to stability contraints of this specific system
-
-            # We use the new BubbleProfileCalculator from saetass.utils.bubble_profiles
-            t_b = 3 * u.Myr
-            L_wind = 2 * 1e38 * u.erg / u.s
-            M_dot = 1e-4 * const.M_sun / u.yr
-            rho_0 = 20 * const.m_p / u.cm**3
-            calculator = BubbleProfileCalculator(
-                r_grid=np.linspace(0.0, 300.0, 600) * u.pc,
-                model="Morlino21",
-                L_wind=L_wind,
-                M_dot=M_dot,
-                rho_0=rho_0,
-                t_b=t_b,
-            )
-
-            setup = calculator.get_all_profiles(
-                E_k,
-                eta_B=0.1,
-                eta_inj=0.1,
-                E_max=1 * u.PeV,
-                diffusion_model=diff_model_name,
-            )
-
-            r = setup["r_grid"].to("pc").value
-            R_TS = setup["R_TS"]
-            R_b = setup["R_b"]
-            print(f"R_TS = {R_TS}")
-            print(f"R_b = {R_b}")
-            print(f"L_wind = {L_wind}")
-            print(f"M_dot = {M_dot}")
-            t_adv = (4 * R_TS / 3 * np.sqrt(M_dot / (2 * L_wind))) * (
-                (R_b**3) / (R_TS**3) - 1
-            )
-            print(f"t_adv = {t_adv.to('Myr')}")
-            t_end = 3.0  # 3.0 Myr in dimensionless scale
-
-            # 2. Create Solver arguments
-            t_grid = np.linspace(0, t_end, num_timesteps)
-            f_values = np.zeros(len(r))  # Initially no distribution
-
-            # We create an instance of Grid class
-            grid = Grid(r_centers=setup["r_grid"], t_grid=t_grid * u.Myr)
-
-            # We generate the parameters for the subsolvers
-            op_params = {
-                "advection": {
-                    "v_centers": setup["v_field"],
-                    "order": 2,
-                    "limiter": "minmod",
-                    "cfl": 0.8,
-                    "inflow_value_U": 0.0 * su.AREA * su.PSI_P,
-                },
-                "diffusion": {
-                    "D_values": setup["D_values"],
-                    "psi_end": 0.0 * su.PSI_P,
-                },
-                "source": {"source": setup["Q"]},
-            }
-
-            # 3. Instantiate Solver
-            # We then instantiate Solver class
-            solver = Solver(
-                state=State(
-                    psi_p=f_values * su.PSI_P, grid=grid, particle=Particle.PROTON
-                ),
-                problem_type="advection-source-diffusion",
-                operator_params=op_params,
-                substeps={"advection": 1, "diffusion": 1, "source": 1},
-            )
-
-            # 4. Calculate the time sampling checkpoints to plot curves over time
-            num_timesteps = len(t_grid) - 1
-            sample_indices = np.unique(
-                np.append(
-                    np.linspace(0, num_timesteps, sample_count, dtype=int),
-                    [0, num_timesteps],
-                )
-            )
-
-            stored_curves = [solver.state.psi_p.to_value(su.PSI_P)]
-            stored_times = [t_grid[0]]
-
-            # 5. Simulation loop
-            current_step = 0
-            for next_step in sample_indices[1:]:
-                steps_to_advance = int(next_step - current_step)
-                if steps_to_advance > 0:
-                    solver.step(steps_to_advance)  # SIMULATION CORE
-                    current_step = next_step
-
-                stored_curves.append(solver.state.psi_p.to_value(su.PSI_P))
-                stored_times.append(t_grid[current_step])
-
-            # 6. Result Normalization
-            ts_idx = np.where(r >= R_TS.to("pc").value)[0][0] + 5
-            ts_level = (
-                stored_curves[-1][ts_idx] if stored_curves[-1][ts_idx] > 0 else 1.0
-            )
-            normalized_curves = [curve / ts_level for curve in stored_curves]
-
-            # 7. Generate Baseline Theoretical Configuration
-            f_theoretical = calculator.compute_analytical_CR_profile(
-                D_values=setup["D_values"],
-                f_gal=0.0,
-                f_TS=1.0,
-            )
-
-            # 8. Render local plot data to the axis GridSpec
-            plot_simulation_step(
-                ax,
-                r,
-                R_TS.to("pc").value,
-                R_b.to("pc").value,
-                energy,
-                diff_props,
-                col_idx,
-                normalized_curves,
-                stored_times,
-                f_theoretical,
-            )
-
-    # 9. Render figure
+    # 10. Render figure
     finalize_and_save_figure(fig, gs, diffusion_models)

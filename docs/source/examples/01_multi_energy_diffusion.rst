@@ -25,7 +25,7 @@ Then, a parameterization of the specific physical setup we want to simulate is p
    :language: python
    :start-after: # 1. Generate Physical Setup Parameters
    :end-before: # 2. Create Solver arguments
-   :dedent: 12
+   :dedent: 4
 
 Once the setup is generated, the :py:class:`~saetass.solver.Solver` arguments are created. To this end, a :class:`~saetass.grid.Grid` object is instantiated to represent our geometry and the mathematical assumptions for the advection, diffusion and source operators are explicitly configured.
 
@@ -33,7 +33,7 @@ Once the setup is generated, the :py:class:`~saetass.solver.Solver` arguments ar
    :language: python
    :start-after: # 2. Create Solver arguments
    :end-before: # 3. Instantiate Solver
-   :dedent: 12
+   :dedent: 4
 
 
 With everything prepared, the main :py:class:`~saetass.solver.Solver` is instantiated.
@@ -42,7 +42,7 @@ With everything prepared, the main :py:class:`~saetass.solver.Solver` is instant
    :language: python
    :start-after: # 3. Instantiate Solver
    :end-before: # 4. Calculate the time sampling checkpoints to plot curves over time
-   :dedent: 12
+   :dedent: 4
 
 Finally, the simulation is marched forward in time iteratively using the core :py:meth:`~saetass.solver.Solver.step` method.
 
@@ -50,14 +50,33 @@ Finally, the simulation is marched forward in time iteratively using the core :p
    :language: python
    :start-after: # 5. Simulation loop
    :end-before: # 6. Result Normalization
-   :dedent: 12
+   :dedent: 4
 
 After having done the simulation for each energy and diffusion model, the results are normalized and compared with the theoretical solutions.
+
+Running the Simulations in Parallel
+-----------------------------------
+
+The twelve simulations are independent, so :py:func:`~saetass.sweep.run_sweep` runs them in parallel worker processes and returns their results in order. The function of one simulation must be defined at the top level of the script, where the workers can import it, and the code that calls :py:func:`~saetass.sweep.run_sweep` must be under ``if __name__ == "__main__":``.
+
+.. literalinclude:: ../../../examples/01_multi_energy_diffusion.py
+   :language: python
+   :start-after: # 8. Run the simulations in parallel worker processes
+   :end-before: # 9. Render the data
+   :dedent: 4
+
+SAETASS also parallelizes a single simulation, with threads that advance different momenta of its grid, but 1D grids such as those of this example run serially. In general:
+
+* For independent simulations, such as the energies of a 1D problem or a scan of parameters, use :py:func:`~saetass.sweep.run_sweep`: processes scale much better than threads.
+* For a single large simulation on a 2D grid, rely on the threads. SAETASS chooses how many from the work of the simulation and the idle cores of the machine.
+* To share the machine, for instance with other simulations started by hand, limit the threads of each one with ``SAETASS_MAX_THREADS`` or :py:func:`saetass.parallel.set_max_threads`. ``NUMBA_NUM_THREADS``, set before Python starts, bounds the threads available to every Numba function instead.
+
+See :doc:`/api/performance` for the details.
 
 Complete Script Overview
 ------------------------
 
-The complete operational script orchestrates these specific steps inside a structural loop to map different initial energies and diffusion setups, outputting the result graphically.
+The complete operational script orchestrates these specific steps in a function that the workers run for the different initial energies and diffusion setups, outputting the result graphically.
 
 .. literalinclude:: ../../../examples/01_multi_energy_diffusion.py
    :language: python
