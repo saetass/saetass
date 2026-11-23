@@ -4,6 +4,22 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `tutorials/execute.py` executes the tutorials as they are committed, and the test suite checks their outputs for errors, warnings, widgets and paths of the machine that executed them ([#32](https://github.com/saetass/saetass/issues/32)).
+
+### Changed
+
+- The progress bar no longer uses widgets in notebooks, so it is saved with them, the documentation and GitHub show it, and the `tutorials` extra does not install `ipywidgets` ([#32](https://github.com/saetass/saetass/issues/32)).
+- The output in notebooks takes the width that Rich chooses, which `JUPYTER_COLUMNS` sets, instead of 120 columns ([#32](https://github.com/saetass/saetass/issues/32)).
+- The AAFRAG cross sections log a warning below their lowest energy through the logger of SAETASS, instead of issuing a `UserWarning` ([#32](https://github.com/saetass/saetass/issues/32)).
+
+### Fixed
+
+- The progress bar ends in its final state in notebooks, without an empty output below it, and with the extrema of the final state ([#32](https://github.com/saetass/saetass/issues/32)).
+- `EnergyLossCalculator.get_loss_timescales` no longer issues a divide-by-zero warning where there are no losses, and the timescale is always positive infinity there ([#32](https://github.com/saetass/saetass/issues/32)).
+- The tutorials fit the pages of the documentation, with legible colors, and show no paths of the machine that executed them ([#32](https://github.com/saetass/saetass/issues/32)).
+
 ## [0.6.0] - 2026-11-03
 
 ### Added
