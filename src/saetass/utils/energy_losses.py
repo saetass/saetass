@@ -662,21 +662,14 @@ class EnergyLossCalculator:
         # Compute all mechanisms
         self.compute_total_losses()
 
-        for mechanism, E_dot in self._E_dot_components.items():
+        E_dots = {**self._E_dot_components, "total": self._E_dot_total}
+        for mechanism, E_dot in E_dots.items():
             if r_index is not None:
-                # Timescale at specific radius: τ = E / |dE/dt|
-                tau = self.E_grid / (-E_dot[:, r_index])
-                timescales[mechanism] = tau.to(u.yr)
+                E_grid, E_dot = self.E_grid, E_dot[:, r_index]
             else:
-                # Full 2D array
-                tau = self.E_grid[:, np.newaxis] / (-E_dot)
-                timescales[mechanism] = tau.to(u.yr)
-        # Total timescale
-        if r_index is not None:
-            tau_total = self.E_grid / (-self._E_dot_total[:, r_index])
-            timescales["total"] = tau_total.to(u.yr)
-        else:
-            tau_total = self.E_grid[:, np.newaxis] / (-self._E_dot_total)
-            timescales["total"] = tau_total.to(u.yr)
+                E_grid = self.E_grid[:, np.newaxis]
+            # τ = E / |dE/dt|, infinite where there are no losses
+            with np.errstate(divide="ignore"):
+                timescales[mechanism] = (E_grid / np.abs(E_dot)).to(u.yr)
 
         return timescales
