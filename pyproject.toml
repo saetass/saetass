@@ -26,7 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 tutorials = [
     "matplotlib>=3.8.4",  # the first release that supports numpy 2
-    "ipykernel>=6.0.2",  # 5.x is incompatible with recent IPython
+    "ipykernel>=6.3.1",  # earlier releases do not declare their dependency on ipython_genutils
 ]
 test = [
     "pytest>=7.0.0",  # the pythonpath option
