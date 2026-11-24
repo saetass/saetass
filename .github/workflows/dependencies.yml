@@ -84,7 +84,11 @@ jobs:
           uv pip list
 
       - name: Build the documentation
-        run: python -m sphinx -b html docs/source docs/_build/html
+        # With the options of Read the Docs. Sphinx only warns about the images it cannot read
+        working-directory: docs/source
+        run: |
+          python -m sphinx -b html -d _build/doctrees -w warnings.txt . ../_build/html
+          if grep "image file not readable" warnings.txt; then exit 1; fi
 
   tutorials:
     name: Tutorials (oldest versions)
