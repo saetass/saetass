@@ -1,6 +1,8 @@
 import os
+import shutil
 import sys
 from importlib.metadata import version as package_version
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(r"../../src"))
 
@@ -37,10 +39,19 @@ extensions = [
 # them here could publish warnings and errors with paths of the machine that builds
 nbsphinx_execute = "never"
 
+# Copied instead of linked: Sphinx resolves symbolic links before the relative paths of
+# images, so it would not find the figures of linked notebooks
+_docs = Path(__file__).parent
+_copies = _docs / "tutorials" / "tutorials_folder"
+shutil.rmtree(_copies, ignore_errors=True)
+_copies.mkdir()
+for _notebook in (_docs.parents[1] / "tutorials").glob("*.ipynb"):
+    shutil.copy2(_notebook, _copies)
+
 bibtex_bibfiles = ["references.bib"]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns = ["_build"]
 
 html_favicon = r"_static/saetass_favicon.ico"
 html_logo = r"_static/saetass_logotagline_horizontal.svg"

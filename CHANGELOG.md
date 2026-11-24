@@ -4,6 +4,12 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-24
+
+### Fixed
+
+- The documentation shows the figures of the tutorials, which were missing ([#94](https://github.com/saetass/saetass/pull/94)).
+
 ## [0.6.1] - 2026-11-24
 
 ### Added
@@ -160,7 +166,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 First public, experimental release: transport of cosmic rays in spherical symmetry with advection, diffusion, energy losses and sources combined by operator splitting, bubble profiles of stellar clusters, energy loss rates, tests, tutorials and examples.
 
-[Unreleased]: https://github.com/saetass/saetass/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/saetass/saetass/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/saetass/saetass/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/saetass/saetass/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/saetass/saetass/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/saetass/saetass/compare/v0.5.0...v0.5.1
