@@ -16,3 +16,4 @@ These tutorials are written as Jupyter Notebooks, allowing you to see the code, 
    tutorials_folder/06_emissions
    tutorials_folder/07_simulation_diagnostics
    tutorials_folder/08_time_dependent_parameters
+   tutorials_folder/09_parallelization_and_sweeps

@@ -71,7 +71,7 @@ SAETASS also parallelizes a single simulation, with threads that advance differe
 * For a single large simulation on a 2D grid, rely on the threads. SAETASS chooses how many from the work of the simulation and the idle cores of the machine.
 * To share the machine, for instance with other simulations started by hand, limit the threads of each one with ``SAETASS_MAX_THREADS`` or :py:func:`saetass.parallel.set_max_threads`. ``NUMBA_NUM_THREADS``, set before Python starts, bounds the threads available to every Numba function instead.
 
-See :doc:`/api/performance` for the details.
+See the :doc:`tutorial on parallelization and sweeps </tutorials/tutorials_folder/09_parallelization_and_sweeps>` and :doc:`/api/performance` for the details.
 
 Complete Script Overview
 ------------------------
