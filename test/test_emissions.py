@@ -574,7 +574,7 @@ class TestNaimaComparisons:
 
         n_gas_val = base_args["n_gas"][0].to_value(u.cm**-3)
         naima_pion = PionDecay(
-            naima_dist, nH=n_gas_val * u.cm**-3, nuclear_enhancement=False
+            naima_dist, nh=n_gas_val * u.cm**-3, nuclear_enhancement=False
         )
         E_out = base_args["E_out_grid"]
         naima_flux = naima_pion.flux(E_out, distance=1 * u.kpc)
