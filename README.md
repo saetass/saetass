@@ -15,7 +15,7 @@ A Python library for simulating cosmic-ray transport in spherically symmetric as
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19468484.svg)](https://doi.org/10.5281/zenodo.19468484)
 [![CI tests](https://img.shields.io/github/actions/workflow/status/saetass/saetass/ci.yml?logo=github&logoColor=white&label=tests)](https://github.com/saetass/saetass/actions)
 [![codecov](https://img.shields.io/codecov/c/github/saetass/saetass?logo=codecov&logoColor=white)](https://codecov.io/gh/saetass/saetass)
-[![Docs](https://img.shields.io/readthedocs/saetass?logo=readthedocs&logoColor=white)](https://saetass.readthedocs.io/en/latest/)
+[![Docs](https://img.shields.io/readthedocs/saetass?logo=readthedocs&logoColor=white)](https://saetass.readthedocs.io/en/stable/)
 [![PyPI version](https://img.shields.io/pypi/v/saetass?logo=pypi&logoColor=white&color=007EC6)](https://pypi.org/project/saetass/)<!-- [![Python versions](https://img.shields.io/pypi/pyversions/saetass?logo=python&logoColor=white)](https://pypi.org/project/saetass/) -->
 [![Project Status: Active](https://img.shields.io/badge/project%20status-active-44CC11.svg?logo=github&logoColor=white)](https://www.repostatus.org/#active)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome!-F3AC4B.svg?logo=github&logoColor=white)](CONTRIBUTING.md)
@@ -33,7 +33,7 @@ A Python library for simulating cosmic-ray transport in spherically symmetric as
 
 The package decomposes the full transport equation into independent physical operators: **diffusion**, **advection**, **energy losses** and **source**. It evolves them via mathematically robust **operator-splitting schemes**. Each operator is implemented as a dedicated finite-volume solver, ensuring modularity, testability and physical transparency.
 
-> **For comprehensive documentation**, visit the [SAETASS Documentation](https://saetass.readthedocs.io/en/latest/).
+> **For comprehensive documentation**, visit the [SAETASS Documentation](https://saetass.readthedocs.io/en/stable/).
 
 
 <div align="center">
@@ -64,13 +64,13 @@ pip install saetass
 This will install the latest stable version of SAETASS from [PyPI](https://pypi.org/project/saetass/).
 The dependencies of other use cases are installed as extras: `tutorials` to run the tutorials and examples, `test`, `docs`, and `dev` for all of them, for instance `pip install "saetass[tutorials]"`.
 
-> See the full [Installation Guide](https://saetass.readthedocs.io/en/latest/installation.html) for additional installation options and troubleshooting.
+> See the full [Installation Guide](https://saetass.readthedocs.io/en/stable/installation.html) for additional installation options and troubleshooting.
 
 ## Quickstart
 
-For step-by-step guides to get started with SAETASS, check the [Tutorials](https://saetass.readthedocs.io/en/latest/tutorials/index.html) section of the [documentation](https://saetass.readthedocs.io/en/latest/).
+For step-by-step guides to get started with SAETASS, check the [Tutorials](https://saetass.readthedocs.io/en/stable/tutorials/index.html) section of the [documentation](https://saetass.readthedocs.io/en/stable/).
 
-For complete, more advanced examples, check the [Examples](https://saetass.readthedocs.io/en/latest/examples/index.html) section of the [documentation](https://saetass.readthedocs.io/en/latest/).
+For complete, more advanced examples, check the [Examples](https://saetass.readthedocs.io/en/stable/examples/index.html) section of the [documentation](https://saetass.readthedocs.io/en/stable/).
 
 
 ## Mathematical background
