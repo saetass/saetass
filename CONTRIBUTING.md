@@ -4,6 +4,8 @@ Thank you for your interest in contributing to **SAETASS**! Whether it's a bug r
 
 Please take a moment to review this guide before submitting your contribution.
 
+The [`latest` documentation](https://saetass.readthedocs.io/en/latest/) follows `main` and includes changes that are not released yet.
+
 ## Table of contents
 
 - [Code of conduct](#code-of-conduct)
