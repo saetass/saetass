@@ -1472,3 +1472,8 @@ html[data-theme="dark"] .bd-content div.nbinput.container div.input_area {
     color: #565b66 !important;
     /* Remaining part of the progress bar */
 }
+
+/* The index of the tutorials has headings. The captions are for the sidebar */
+.bd-article .toctree-wrapper>p.caption {
+    display: none;
+}

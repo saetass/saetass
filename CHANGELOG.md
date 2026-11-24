@@ -6,10 +6,12 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ### Added
 
+- Tutorials on time-dependent parameters and on parallelization and sweeps, and a division of the tutorials into basic and advanced ([#62](https://github.com/saetass/saetass/issues/62)).
 - `tutorials/execute.py` executes the tutorials as they are committed, and the test suite checks their outputs for errors, warnings, widgets and paths of the machine that executed them ([#32](https://github.com/saetass/saetass/issues/32)).
 
 ### Changed
 
+- Example 01 runs its simulations in parallel with `run_sweep` ([#62](https://github.com/saetass/saetass/issues/62)).
 - The progress bar no longer uses widgets in notebooks, so it is saved with them, the documentation and GitHub show it, and the `tutorials` extra does not install `ipywidgets` ([#32](https://github.com/saetass/saetass/issues/32)).
 - The output in notebooks takes the width that Rich chooses, which `JUPYTER_COLUMNS` sets, instead of 120 columns ([#32](https://github.com/saetass/saetass/issues/32)).
 - The AAFRAG cross sections log a warning below their lowest energy through the logger of SAETASS, instead of issuing a `UserWarning` ([#32](https://github.com/saetass/saetass/issues/32)).
