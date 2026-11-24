@@ -150,6 +150,29 @@ class TestBubbleStructure:
         assert (lossy.R_TS / calc.R_TS).to_value(u.one) == pytest.approx(1 / factor)
         assert lossy.v_w == calc.v_w
 
+    def test_momentum_driven_limit(self, r_grid, base_kwargs):
+        # Momentum-driven radius, the smallest the wind momentum allows
+        M_dot, rho_0, t = (base_kwargs[k] for k in ("M_dot", "rho_0", "t_b"))
+        v_w = np.sqrt(2 * base_kwargs["L_wind"] / M_dot)
+        R_p = (3 * M_dot * v_w * t**2 / (2 * np.pi * rho_0)) ** (1 / 4)
+        A = (125 / (154 * np.pi)) ** (1 / 5)
+        eta_min = ((R_p / A) ** 5 * rho_0 / (base_kwargs["L_wind"] * t**3)).to_value(
+            u.one
+        )
+        # Just above eta_min the energy-driven bubble is the momentum-driven one, with
+        # R_b / R_TS = 1.30 for any wind, density and age
+        limit = BubbleProfileCalculator(r_grid, eta_m=1.001 * eta_min, **base_kwargs)
+        assert (limit.R_b / limit.R_TS).to_value(u.one) == pytest.approx(
+            np.sqrt(15 * 154 / (11 * 125)), rel=1e-3
+        )
+        # Below it the termination shock reaches the shell, and the minimum is reported
+        with pytest.raises(
+            ValueError, match=rf"below its minimum, {eta_min:.3g}.*close to R_b"
+        ):
+            BubbleProfileCalculator(r_grid, eta_m=0.999 * eta_min, **base_kwargs)
+        with pytest.raises(ValueError, match="beyond R_b"):
+            BubbleProfileCalculator(r_grid, eta_m=0.5 * eta_min, **base_kwargs)
+
     @pytest.mark.parametrize("R_c", [0.0, 5.0] * u.pc)
     def test_magnetic_field(self, r_grid, base_kwargs, R_c):
         calc = BubbleProfileCalculator(r_grid, R_c=R_c, **base_kwargs)

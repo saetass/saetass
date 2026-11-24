@@ -90,7 +90,7 @@ class BubbleProfileCalculator:
         Other optional kwargs:
 
         - ``R_c`` : astropy.units.Quantity. Core radius. Units compatible with :py:data:`~saetass.units.LENGTH`. Default is ``0 pc``.
-        - ``eta_m`` : float. Fraction of the wind luminosity that drives the bubble expansion, in :math:`(0, 1]`, accounting for radiative losses. It replaces :math:`L_w` by :math:`\eta_m L_w` in the bubble and termination shock radii, while the wind velocity keeps using :math:`L_w`. Default is ``1``.
+        - ``eta_m`` : float. Fraction of the wind luminosity that drives the bubble expansion, in :math:`(0, 1]`, accounting for radiative losses. It replaces :math:`L_w` by :math:`\eta_m L_w` in the bubble and termination shock radii, while the wind velocity keeps using :math:`L_w`. It must not leave the bubble smaller than a momentum-driven one, where the termination shock reaches the shell (a ``ValueError`` is raised). Default is ``1``.
         - ``shell`` : str. Density profile of the swept-up shell, ``"uniform"`` or ``"fragmented"`` (see :py:meth:`compute_density_profile`). Default is ``"uniform"``.
         - ``M_shell`` : astropy.units.Quantity. Mass of the swept-up shell. Units compatible with :py:data:`~saetass.units.MASS`. Default is the swept-up mass, :math:`(4\pi/3) R_b^3 \rho_0`.
         - ``delta_shell`` : float. Thickness of the shell as a fraction of :math:`R_b`, in :math:`(0, 1)`: the contact discontinuity is at :math:`R_{cd} = (1 - \delta_\mathrm{shell}) R_b`. Default is ``0.05``.
@@ -227,6 +227,7 @@ class BubbleProfileCalculator:
             * rho_0 ** (-3 / 10)
             * t_b ** (2 / 5)
         ).to(u.pc)
+        self._check_momentum_driven_limit()
 
         # Density of the cold wind just upstream of the termination shock
         self.rho_w = (M_dot / (4 * math.pi * (self.R_TS**2) * self.v_w)).to(
@@ -256,6 +257,28 @@ class BubbleProfileCalculator:
         # Wind also includes the core region
         self.masks["r_wind_overall"] = r_val < self.R_TS.value
         logger.debug("Weaver77 kinematics computed")
+
+    def _check_momentum_driven_limit(self):
+        r"""
+        Reject an ``eta_m`` that makes the bubble smaller than a momentum-driven one.
+
+        The momentum of the wind alone pushes the shell at least to the radius of a momentum-driven bubble, :math:`R_p = (3 \dot{M} v_w t_b^2 / 2 \pi \rho_0)^{1/4}`.
+        Radiative losses that leave a smaller bubble, :math:`R_b < R_p`, mean that :math:`\eta_m` is below :math:`\eta_{m,\min} = \eta_m (R_p / R_b)^5`: the pressure of the bubble no longer stops the wind before the shell, and :math:`R_{TS}` approaches :math:`R_b` (:math:`R_b / R_{TS} = 1.30` at :math:`\eta_{m,\min}`, for any wind, density and age), and soon exceeds it.
+        """
+        M_dot, rho_0, t_b = (self.kwargs[key] for key in ("M_dot", "rho_0", "t_b"))
+        R_p = ((3 * M_dot * self.v_w * t_b**2 / (2 * np.pi * rho_0)) ** (1 / 4)).to(
+            u.pc
+        )
+        if self.R_b < R_p:
+            eta_m = self.kwargs.get("eta_m", 1.0)
+            eta_min = eta_m * (R_p / self.R_b).to_value(u.one) ** 5
+            raise ValueError(
+                f"The bubble, R_b = {self.R_b.to_value(u.pc):.3g} pc, is smaller than a momentum-driven bubble, "
+                f"{R_p.to_value(u.pc):.3g} pc: eta_m = {eta_m:.3g} is below its minimum, {eta_min:.3g}, for this "
+                f"wind, density and age. The termination shock, at {self.R_TS.to_value(u.pc):.3g} pc, would be "
+                f"{'beyond' if self.R_TS > self.R_b else 'close to'} R_b, and the profiles of an energy-driven "
+                "bubble do not apply."
+            )
 
     def _shell_inner_radius(self) -> u.Quantity:
         """Inner radius of the gas of the shell: R_cd, or R_cd minus the penetration if fragmented."""
