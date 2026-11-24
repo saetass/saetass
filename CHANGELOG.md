@@ -4,6 +4,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-24
+
 ### Added
 
 - Tutorials on time-dependent parameters and on parallelization and sweeps, and a division of the tutorials into basic and advanced ([#62](https://github.com/saetass/saetass/issues/62)).
@@ -15,6 +17,7 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 - The progress bar no longer uses widgets in notebooks, so it is saved with them, the documentation and GitHub show it, and the `tutorials` extra does not install `ipywidgets` ([#32](https://github.com/saetass/saetass/issues/32)).
 - The output in notebooks takes the width that Rich chooses, which `JUPYTER_COLUMNS` sets, instead of 120 columns ([#32](https://github.com/saetass/saetass/issues/32)).
 - The AAFRAG cross sections log a warning below their lowest energy through the logger of SAETASS, instead of issuing a `UserWarning` ([#32](https://github.com/saetass/saetass/issues/32)).
+- The minimum version of `ipykernel` in the `tutorials` extra is 6.3.1, since earlier releases do not declare all their dependencies ([#89](https://github.com/saetass/saetass/pull/89)).
 
 ### Fixed
 
@@ -157,7 +160,8 @@ All notable changes to SAETASS are documented here. The format is based on [Keep
 
 First public, experimental release: transport of cosmic rays in spherical symmetry with advection, diffusion, energy losses and sources combined by operator splitting, bubble profiles of stellar clusters, energy loss rates, tests, tutorials and examples.
 
-[Unreleased]: https://github.com/saetass/saetass/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/saetass/saetass/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/saetass/saetass/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/saetass/saetass/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/saetass/saetass/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/saetass/saetass/compare/v0.4.0...v0.5.0
