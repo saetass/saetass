@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import subprocess
 import sys
+import types
 from concurrent.futures import ProcessPoolExecutor
 
 import numba
@@ -19,6 +20,7 @@ from saetass.cli import (
     create_progress_bar,
     is_quiet,
     output,
+    progress,
     set_log_level,
     set_quiet,
     set_rich_logging,
@@ -143,6 +145,66 @@ class TestQuiet:
         assert create_progress_bar()._progress is None
         # Later simulations print their own bar
         assert "Solving" in self._output(capsys)
+
+
+class FakeDisplay:
+    """Stand-in for ``IPython.display.display`` and the handle it returns."""
+
+    def __init__(self):
+        self.bundles = []
+
+    def __call__(self, bar, display_id):
+        assert display_id
+        self.update(bar)
+        return self
+
+    def update(self, bar):
+        # The representations that IPython asks for
+        self.bundles.append(bar._repr_mimebundle_([], []))
+
+
+class TestNotebook:
+    @pytest.fixture
+    def notebook(self, monkeypatch, default_output):
+        """The bars displayed in a notebook."""
+        display = FakeDisplay()
+        module = types.ModuleType("IPython.display")
+        module.display = display
+        monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
+        monkeypatch.setitem(sys.modules, "IPython.display", module)
+        monkeypatch.setattr(progress, "console", Console(force_jupyter=True))
+        return display
+
+    def test_bar_ends_in_its_final_state(self, notebook):
+        solver = _solver(_grid())
+        solver.run()
+        first, last = notebook.bundles[1], notebook.bundles[-1]
+        assert "0/2" in first["text/plain"]
+        for bundle in (first, last):
+            assert bundle["text/html"].startswith("<pre")
+        assert "2/2" in last["text/plain"] and "2/2" in last["text/html"]
+        maximum = np.max(solver.state._values)
+        assert f"max={maximum:.4g}" in last["text/plain"]
+
+    def test_each_call_shows_its_own_bar(self, notebook):
+        solver = _solver(_grid())
+        solver.step(1)
+        assert "1/2" in notebook.bundles[-1]["text/plain"]
+        solver.step(1)
+        assert "2/2" in notebook.bundles[-1]["text/plain"]
+
+    def test_bar_is_redrawn_at_the_refresh_interval(self, notebook, monkeypatch):
+        monkeypatch.setattr(progress, "NOTEBOOK_REFRESH_INTERVAL", np.inf)
+        bar = create_progress_bar()
+        bar.start()
+        task = bar.add_task("Solving...", total=100, metrics="")
+        drawn = len(notebook.bundles)
+        for completed in range(100):
+            bar.update(task, completed=completed)
+        assert len(notebook.bundles) == drawn
+        bar.stop()
+        assert len(notebook.bundles) == drawn + 1
+        assert "99/100" in notebook.bundles[-1]["text/plain"]
 
 
 @pytest.fixture

@@ -391,14 +391,16 @@ class TestEmissionCalculator:
             y_unit="GeV cm-2 s-1",
         )
 
-    def test_aafrag_uses_total_primary_energy(self):
+    def test_aafrag_uses_total_primary_energy(self, saetass_caplog):
         aafragpy = pytest.importorskip("aafragpy")
         from saetass.utils.cross_sections import AAFragPyModel
 
         T_p = np.array([2.0, 3.5, 10.0, 1e3])
         E_gamma = np.array([0.1, 1.0])
-        with pytest.warns(UserWarning, match="total energies >= 4 GeV"):
-            sigma = AAFragPyModel().compute_matrix(E_gamma, T_p)
+        sigma = AAFragPyModel().compute_matrix(E_gamma, T_p)
+        (record,) = saetass_caplog.records
+        assert record.levelname == "WARNING"
+        assert "total energies >= 4 GeV" in record.getMessage()
         # T_p = 2 GeV is below the tables (E_p = 2.94 GeV < 4 GeV); the others are
         # evaluated at the total energy T_p + m_p c^2
         assert np.all(sigma[:, 0] == 0.0)

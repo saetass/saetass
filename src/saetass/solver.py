@@ -442,6 +442,11 @@ class Solver:
             params = {**params, "v_centers_physical": advection["v_centers"]}
         return params
 
+    def _progress_metrics(self) -> str:
+        """Extrema of the state, for the progress bar."""
+        values = self.state._values
+        return f"max={np.max(values):.4g} min={np.min(values):.4g}"
+
     def _advance(self, n_steps):
         """Advance the solution by n_steps using operator splitting."""
         manage_progress = False
@@ -468,9 +473,7 @@ class Solver:
                     now = time.monotonic()
                     if now >= next_metrics:
                         next_metrics = now + _PROGRESS_METRICS_INTERVAL
-                        val_max = np.max(self.state._values)
-                        val_min = np.min(self.state._values)
-                        update["metrics"] = f"max={val_max:.4g} min={val_min:.4g}"
+                        update["metrics"] = self._progress_metrics()
                     self._progress.update(self._task_id, **update)
 
                 self.splitting_scheme.apply(
@@ -483,6 +486,10 @@ class Solver:
             # Also on errors: a live bar left running would swallow later output
             if manage_progress or self.global_step >= self.total_steps:
                 if getattr(self, "_progress", None) is not None:
+                    # The extrema that the bar shows may be those of an earlier step
+                    self._progress.update(
+                        self._task_id, metrics=self._progress_metrics()
+                    )
                     self._progress.stop()
                     self._progress = None
 

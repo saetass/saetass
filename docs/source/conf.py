@@ -33,7 +33,9 @@ extensions = [
     "nbsphinx",
 ]
 
-nbsphinx_allow_errors = True
+# The tutorials are committed with their outputs (see tutorials/execute.py). Executing
+# them here could publish warnings and errors with paths of the machine that builds
+nbsphinx_execute = "never"
 
 bibtex_bibfiles = ["references.bib"]
 

@@ -89,6 +89,7 @@ We welcome pull requests for:
 - **Type hints**: Encouraged for function signatures where they improve clarity.
 - **Physical inputs**: Validate physical function arguments with `@u.quantity_input`, targeting the canonical units of `saetass.units`, and any other physical input (dictionary entries, `**kwargs`, values returned by callables) with `saetass.units.validate_quantity`. Do not re-check units manually; only convert the validated inputs to the units used internally.
 - **Testing**: Every new feature or fix should include corresponding tests in the `test/` directory. Use `pytest` to run them.
+- **Tutorials**: They are committed with their outputs, which the documentation shows as they are. After editing one, or changing code that modifies the outputs, run `python tutorials/execute.py`, which executes the tutorials (all, or those given as arguments) with the width of the pages of the documentation. `test/test_tutorials.py` checks the outputs: no errors, no Python warnings, no widgets and no paths of your machine.
 - **Naming**: Follow PEP 8 conventions. Use descriptive variable names — prefer `diffusion_coefficient` over `D` in public APIs.
 
 ## Supported versions

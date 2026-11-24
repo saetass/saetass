@@ -144,6 +144,20 @@ class TestEnergyLossCalculator:
         timescales_r = calc_e.get_loss_timescales(r_index=0)
         assert timescales_r["total"].shape == (len(base_args["E_grid"]),)
 
+    @pytest.mark.filterwarnings("error")
+    @pytest.mark.parametrize("r_index", [None, 0])
+    def test_timescale_without_losses_is_infinite(self, base_args, r_index):
+        # Protons below the threshold of pion production
+        E_grid = np.array([0.01, 0.1, 10.0]) * u.GeV
+        calc_p = EnergyLossCalculator(
+            **{**base_args, "E_grid": E_grid}, particle="proton"
+        )
+        calc_p.compute_pion_production_losses()
+        timescales = calc_p.get_loss_timescales(r_index=r_index)
+        for tau in (timescales["pion"], timescales["total"]):
+            assert np.all(tau[:2] == np.inf * u.yr)
+            assert np.all(np.isfinite(tau[2])) and np.all(tau[2] > 0.0 * u.yr)
+
 
 class TestTimeDependentLosses:
     @pytest.fixture

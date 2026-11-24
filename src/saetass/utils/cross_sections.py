@@ -21,6 +21,7 @@ Leptonic radiative kernels (:math:`e^-` interactions):
 """
 
 import abc
+import logging
 
 import astropy.constants as const
 import astropy.units as u
@@ -28,6 +29,8 @@ import numpy as np
 import scipy.special
 
 from .. import units as su
+
+logger = logging.getLogger(__name__)
 
 # -----------------
 # BASE CLASSES
@@ -627,7 +630,7 @@ class AAFragPyModel(HadronicCrossSectionModel):
 
     Notes
     -----
-    ``aafragpy`` takes and tabulates total energies, :math:`E_p = T_p + m_p c^2`, while SAETASS works with kinetic energies: the wrapper converts them. The p-p tables start at :math:`E_p = 4\text{ GeV}`, i.e. :math:`T_p \approx 3.06\text{ GeV}`; below it the cross-sections are set to zero and a user warning is issued.
+    ``aafragpy`` takes and tabulates total energies, :math:`E_p = T_p + m_p c^2`, while SAETASS works with kinetic energies: the wrapper converts them. The p-p tables start at :math:`E_p = 4\text{ GeV}`, i.e. :math:`T_p \approx 3.06\text{ GeV}`; below it the cross-sections are set to zero and a warning is logged.
     """
 
     #: Rest energy of the proton, in GeV, the value used by ``aafragpy``.
@@ -681,13 +684,9 @@ class AAFragPyModel(HadronicCrossSectionModel):
         E_cr_tot_grid = E_cr_kin_grid + self.M_P
         valid_mask = E_cr_tot_grid >= self.E_P_MIN
         if not np.all(valid_mask):
-            import warnings
-
-            warnings.warn(
+            logger.warning(
                 "AAFRAG parametrization is only valid for primary proton total energies >= 4 GeV "
-                "(kinetic energies >= 3.06 GeV). Cross-sections for lower energies have been set to 0.",
-                UserWarning,
-                stacklevel=2,
+                "(kinetic energies >= 3.06 GeV). Cross-sections for lower energies have been set to 0."
             )
 
         sigma_matrix = np.zeros((len(E_out_grid), len(E_cr_kin_grid)))

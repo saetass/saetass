@@ -33,7 +33,7 @@ Other use cases need further packages, grouped as optional dependencies ("extras
    * - Extra
      - Use case
    * - :code:`tutorials`
-     - Run the tutorials and examples: Matplotlib, a Jupyter kernel and the widgets of the progress bar in notebooks. Open the notebooks with any Jupyter front end, such as JupyterLab or VS Code. The energy losses tutorial also needs a LaTeX installation, since its figures are typeset with :code:`text.usetex`.
+     - Run the tutorials and examples: Matplotlib and a Jupyter kernel. Open the notebooks with any Jupyter front end, such as JupyterLab or VS Code. The energy losses tutorial also needs a LaTeX installation, since its figures are typeset with :code:`text.usetex`.
    * - :code:`test`
      - Run the test suite: pytest with its coverage and benchmark plugins, and Naima for the comparisons of the emission calculator.
    * - :code:`docs`
