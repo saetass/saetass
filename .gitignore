@@ -34,6 +34,10 @@ outputs/
 examples/outputs/
 # Module written by tutorial 09
 tutorials/wind_sweep.py
+# Copies of the tutorials and builds of the documentation
+docs/source/tutorials/tutorials_folder/
+docs/source/_build/
+docs/_build/
 
 # Simulation / computation outputs
 *.png
